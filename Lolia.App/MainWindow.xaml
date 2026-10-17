@@ -1,7 +1,7 @@
-<Window x:Class="Lolia.App.MainWindow" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" Title="洛链绽放 · Lolia Bloom" Height="700" Width="1180" MinHeight="520" MinWidth="900" Background="#FFFBFD">
+<Window x:Class="Lolia.App.MainWindow" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" Icon="Assets/logo.ico" Title="洛链绽放 · Lolia Bloom" Height="700" Width="1180" MinHeight="520" MinWidth="900" Background="#FFFBFD">
 <DockPanel Margin="18">
 <StackPanel DockPanel.Dock="Top">
-<TextBlock Text="🌸 洛链绽放 · Lolia Bloom" FontSize="27" FontWeight="Bold" Foreground="#D63378"/>
+<StackPanel Orientation="Horizontal"><Image Source="Assets/logo.png" Width="42" Height="42" Margin="0,0,10,0"/><TextBlock Text="洛链绽放 · Lolia Bloom" VerticalAlignment="Center" FontSize="27" FontWeight="Bold" Foreground="#D63378"/></StackPanel>
 <TextBlock Text="账号隧道管理 · Windows 后台服务 · 关闭界面不断线" Foreground="Gray" Margin="0,3,0,14"/>
 <Border Background="#FFF0F5" CornerRadius="10" Padding="12" Margin="0,0,0,12">
 <StackPanel>
@@ -19,6 +19,7 @@
 <Button Content="↻ 刷新流量与状态" Click="Refresh_Click" Padding="12,8" Margin="0,0,8,0"/>
 <Button Content="创建隧道" Click="Create_Click" Padding="12,8" Margin="0,0,8,0"/>
 <Button Content="一键安装后台服务" Click="Install_Click" Padding="12,8" Margin="0,0,8,0"/>
+<Button Content="更新 FRP" Click="UpdateFrp_Click"/>
 <Button Content="卸载后台服务" Click="Uninstall_Click" Padding="12,8"/>
 </WrapPanel>
 <TextBlock Name="Status" Foreground="#B43870" Text="正在检查服务" TextWrapping="Wrap" Margin="0,0,0,5"/>

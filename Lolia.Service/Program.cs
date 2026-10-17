@@ -1,4 +1,5 @@
 using Lolia.Shared;
+using Lolia.Service;
 using System.Security.Cryptography;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -41,6 +42,8 @@ sealed class Manager:BackgroundService {
  }
  async Task<Reply> Handle(Command c,CancellationToken ct){
   switch(c.Action){
+   case "engine-check":{var info=await new EngineUpdater(RunningIds,Stop,Start).Check();return new(true,"OK",JsonSerializer.Serialize(info,Paths.Json));}
+   case "engine-update":return new(true,await new EngineUpdater(RunningIds,Stop,Start).Update());
    case "list": return new(true,"OK",JsonSerializer.Serialize(tunnels.Select(t=>new TunnelView(t.Id,t.Name,t.AutoStart,IsRunning(t.Id),t.Type,t.Node,t.LocalAddress,t.RemoteAddress,t.Description)),Paths.Json));
    case "sync": {
     var incoming=JsonSerializer.Deserialize<List<Tunnel>>(c.Value??"[]",Paths.Json)??new();
@@ -60,6 +63,7 @@ sealed class Manager:BackgroundService {
   }
  }
  async Task Save(CancellationToken ct){Paths.Ensure();var bytes=ProtectedData.Protect(JsonSerializer.SerializeToUtf8Bytes(tunnels,Paths.Json),null,DataProtectionScope.LocalMachine);await File.WriteAllBytesAsync(Paths.Tunnels+".tmp",bytes,ct);var acl=new FileSecurity();acl.SetAccessRuleProtection(true,false);foreach(var sid in new[]{WellKnownSidType.LocalSystemSid,WellKnownSidType.BuiltinAdministratorsSid})acl.AddAccessRule(new FileSystemAccessRule(new SecurityIdentifier(sid,null),FileSystemRights.FullControl,AccessControlType.Allow));FileSystemAclExtensions.SetAccessControl(new FileInfo(Paths.Tunnels+".tmp"),acl);File.Move(Paths.Tunnels+".tmp",Paths.Tunnels,true);}
+ string[] RunningIds(){lock(gate)return running.Keys.Where(IsRunning).ToArray();}
  bool IsRunning(string id){lock(gate)return running.TryGetValue(id,out var p)&&!p.HasExited;}
  bool Start(string id){
   if(!tunnels.Any(t=>t.Id==id)||!File.Exists(Paths.Frpc))return false;
@@ -74,6 +78,6 @@ sealed class Manager:BackgroundService {
    var p=Process.Start(psi);if(p==null)return false;running[id]=p;return true;
   }
  }
- bool Stop(string id){lock(gate){if(!running.Remove(id,out var p))return false;try{if(!p.HasExited)p.Kill(entireProcessTree:true);}catch{}p.Dispose();return true;}}
+ bool Stop(string id){lock(gate){if(!running.Remove(id,out var p))return false;try{if(!p.HasExited){p.Kill(entireProcessTree:true);p.WaitForExit(5000);}}catch{}p.Dispose();return true;}}
  public override async Task StopAsync(CancellationToken ct){foreach(var id in running.Keys.ToArray())Stop(id);await base.StopAsync(ct);}
 }

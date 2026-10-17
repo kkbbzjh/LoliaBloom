@@ -27,6 +27,31 @@ using(var callback=new LoopbackAuthorization(0)){
  var bad=await client.GetAsync($"http://127.0.0.1:{callback.Port}/?code=bad&state=wrong");Assert(bad.StatusCode==HttpStatusCode.BadRequest,"callback state validation");
  var good=await client.GetAsync($"http://127.0.0.1:{callback.Port}/?code=good-code&state=expected-state");Assert(good.IsSuccessStatusCode,"valid loopback callback");Assert(await codeTask=="good-code","authorization code");
 }
+if(args.Length==3&&args[0]=="--engine-test"){
+ var archive=await File.ReadAllBytesAsync(args[1]);var executable=await File.ReadAllBytesAsync(args[2]);
+ var digest=Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(archive)).ToLowerInvariant();
+ var folder=Path.Combine(Path.GetTempPath(),"LoliaBloom-engine-test-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(folder);
+ try{
+  var path=Path.Combine(folder,"frpc.exe");await File.WriteAllBytesAsync(path,executable);File.WriteAllText(Path.Combine(folder,"engine-version.txt"),"v0.71.2");
+  int stopped=0,started=0;
+  HttpClient MakeClient(bool corrupt)=>new(new Fake(r=>{
+   if(r.RequestUri!.Host=="api.github.com")return Task.FromResult(Json(System.Text.Json.JsonSerializer.Serialize(new{tag_name="v99.0.0",assets=new[]{new{name="LoliaFrp_windows_amd64.zip",browser_download_url="https://github.com/Lolia-FRP/lolia-frp/releases/download/v99.0.0/LoliaFrp_windows_amd64.zip",digest="sha256:"+(corrupt?new string('0',64):digest)}}})));
+   return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK){Content=new ByteArrayContent(archive)});
+  }));
+  using(var client=MakeClient(true)){
+   var updater=new Lolia.Service.EngineUpdater(()=>new[]{"test"},_=>{stopped++;return true;},_=>true,path,client);
+   try{await updater.Update();throw new Exception("Expected checksum rejection");}catch(Exception e) when(e.Message.Contains("SHA256")){}
+   Assert(stopped==0,"corrupt download must not stop tunnels");
+  }
+  using(var client=MakeClient(false)){
+   var updater=new Lolia.Service.EngineUpdater(()=>new[]{"test"},_=>{stopped++;return true;},_=>++started>1,path,client);
+   try{await updater.Update();throw new Exception("Expected restart failure");}catch(Exception e) when(e.Message.Contains("更新后无法恢复")){}
+   Assert(started==2,"rollback must restart old engine");Assert(File.ReadAllText(Path.Combine(folder,"engine-version.txt"))=="v0.71.2","rollback must preserve version");
+   Assert((await File.ReadAllBytesAsync(path)).SequenceEqual(executable),"rollback must restore original executable");
+  }
+  Console.WriteLine("PASS: corrupt FRP update rejected before interruption; failed restart rolls back engine and resumes tunnels");
+ }finally{Directory.Delete(folder,true);}
+}
 Console.WriteLine("PASS: pagination, request methods, protocol parsing, credentials, HTTP 201, API errors, traffic sampling");
 static HttpResponseMessage Json(string data,HttpStatusCode code=HttpStatusCode.OK)=>new(code){Content=new StringContent(data,Encoding.UTF8,"application/json")};
 sealed class Fake(Func<HttpRequestMessage,Task<HttpResponseMessage>> handle):HttpMessageHandler{protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage r,CancellationToken ct)=>handle(r);}

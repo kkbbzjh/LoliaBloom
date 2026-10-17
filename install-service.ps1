@@ -16,8 +16,15 @@ try {
     }
     New-Item -ItemType Directory -Force -Path (Join-Path $target 'Service'),(Join-Path $target 'Engine'),$data | Out-Null
     Copy-Item (Join-Path $source '*') (Join-Path $target 'Service') -Recurse -Force
-    if (Test-Path (Join-Path $PSScriptRoot 'frpc.exe')) {
+    $versionPath = Join-Path $target 'Engine/engine-version.txt'
+    $bundledVersion = 'v0.71.2'
+    $installedVersion = if (Test-Path $versionPath) { (Get-Content $versionPath -Raw).Trim() } else { '' }
+    $keepEngine = $false
+    $parsedVersion = $null
+    if ([Version]::TryParse($installedVersion.TrimStart('v'), [ref]$parsedVersion)) { $keepEngine = $parsedVersion -ge [Version]'0.71.2' }
+    if ((Test-Path (Join-Path $PSScriptRoot 'frpc.exe')) -and (-not $keepEngine -or -not (Test-Path (Join-Path $target 'Engine/frpc.exe')))) {
         Copy-Item (Join-Path $PSScriptRoot 'frpc.exe') (Join-Path $target 'Engine/frpc.exe') -Force
+        $bundledVersion | Set-Content $versionPath -Encoding ASCII
     }
     $binPath = '"' + (Join-Path $target 'Service/Lolia.Service.exe') + '"'
     if ($service) {

@@ -2,3 +2,5 @@
 **/obj/
 dist/
 *.zip
+payload.zip
+release/

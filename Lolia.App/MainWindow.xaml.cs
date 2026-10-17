@@ -59,7 +59,7 @@ public partial class MainWindow:Window {
   try{
    var state=ServiceState();if(state!="running")throw new InvalidOperationException(state+"。请点击一键安装后台服务，确认管理员授权。");
    using var pipe=new NamedPipeClientStream(".","LoliaBloomPipe",PipeDirection.InOut,PipeOptions.Asynchronous);
-   using var timeout=new CancellationTokenSource(TimeSpan.FromSeconds(15));
+   using var timeout=new CancellationTokenSource(TimeSpan.FromSeconds(c.Action.StartsWith("engine-",StringComparison.Ordinal)?180:15));
    try{
     await pipe.ConnectAsync(timeout.Token);
     using var writer=new StreamWriter(pipe,Encoding.UTF8,leaveOpen:true){AutoFlush=true};
@@ -151,6 +151,18 @@ public partial class MainWindow:Window {
  async void Start_Click(object s,RoutedEventArgs e)=>await Safe(()=>Action("start"));
  async void Stop_Click(object s,RoutedEventArgs e)=>await Safe(()=>Action("stop"));
  async void Auto_Click(object s,RoutedEventArgs e)=>await Safe(()=>Action("auto",(!Selected().AutoStart).ToString().ToLowerInvariant()));
+ async void UpdateFrp_Click(object s,RoutedEventArgs e)=>await Safe(async()=>{
+  if(installingService)return;installingService=true;poller.Stop();
+  try{
+   Status.Text="正在查询官方 FRP 版本…";
+   var check=await Send(new("engine-check"));if(!check.Ok)throw new Exception(check.Message);
+   using var doc=JsonDocument.Parse(check.Data!);var info=doc.RootElement;
+   if(!info.GetProperty("updateAvailable").GetBoolean()){MessageBox.Show("当前 FRP "+info.GetProperty("installed").GetString()+"，无需更新。");return;}
+   if(MessageBox.Show($"FRP {info.GetProperty("installed").GetString()} → {info.GetProperty("latest").GetString()}\n更新期间会短暂停止隧道，完成后自动恢复；失败会回退旧版本。是否更新？","更新 FRP",MessageBoxButton.YesNo,MessageBoxImage.Question)!=MessageBoxResult.Yes)return;
+   Status.Text="正在下载、校验并更新 FRP，请稍候…";
+   var reply=await Send(new("engine-update"));if(!reply.Ok)throw new Exception(reply.Message);MessageBox.Show(reply.Message,"洛链绽放");
+  }finally{installingService=false;poller.Start();await Refresh();}
+ });
  async void Install_Click(object s,RoutedEventArgs e)=>await Safe(async()=>{
   if(installingService)return;installingService=true;poller.Stop();
   try{

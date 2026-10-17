@@ -36,6 +36,8 @@ jobs:
           $frpc = Get-ChildItem upstream-client -Filter frpc.exe -Recurse | Select-Object -First 1
           if (-not $frpc) { throw 'Official frpc executable not found' }
           Copy-Item $frpc.FullName dist/frpc.exe
+          dotnet run --project Lolia.Tests/Lolia.Tests.csproj -c Release -- --engine-test frpc-upstream.zip dist/frpc.exe
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
           Copy-Item install-service.ps1,install-service.cmd,uninstall-service.cmd,README.md,README.zh-CN.md,THIRD-PARTY-NOTICES.md dist/
           Copy-Item licenses dist/licenses -Recurse
       - name: Verify service installation and IPC
@@ -44,8 +46,14 @@ jobs:
           $ErrorActionPreference = 'Stop'
           & cmd.exe /c dist\install-service.cmd
           if ($LASTEXITCODE) { throw 'Service installation failed' }
+          $engine = Join-Path $env:ProgramFiles 'LoliaBloom/Engine/frpc.exe'
+          $engineHash = (Get-FileHash $engine).Hash
+          $engineVersion = Join-Path $env:ProgramFiles 'LoliaBloom/Engine/engine-version.txt'
+          'v99.0.0' | Set-Content $engineVersion -Encoding ASCII
           & cmd.exe /c dist\install-service.cmd
           if ($LASTEXITCODE) { throw 'Service upgrade failed' }
+          if ((Get-Content $engineVersion -Raw).Trim() -ne 'v99.0.0' -or (Get-FileHash $engine).Hash -ne $engineHash) { throw 'Installer overwrote newer FRP' }
+          'v0.71.2' | Set-Content $engineVersion -Encoding ASCII
           try {
             (Get-Service LoliaBloomService).WaitForStatus('Running', [TimeSpan]::FromSeconds(30))
             function Invoke-ServiceCommand($command) {
@@ -82,19 +90,28 @@ jobs:
           if (-not $app.WaitForExit(30000)) { $app.Kill(); throw 'Screenshot timed out' }
           if (-not (Test-Path LoliaBloom-screenshot.png)) { throw 'Screenshot missing' }
           Compress-Archive dist/* LoliaBloom-win-x64.zip -Force
+          Copy-Item LoliaBloom-win-x64.zip payload.zip
+          dotnet publish Lolia.Launcher/Lolia.Launcher.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true -p:DebugType=None -o release
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          Copy-Item release/LoliaBloom.exe LoliaBloom-win-x64.exe
+          $single = Start-Process (Join-Path $PWD 'LoliaBloom-win-x64.exe') -ArgumentList '--self-test','--screenshot',(Join-Path $PWD 'single-file-screenshot.png') -PassThru
+          if (-not $single.WaitForExit(90000)) { $single.Kill(); throw 'Single EXE startup timed out' }
+          if ($single.ExitCode -ne 0 -or -not (Test-Path single-file-screenshot.png)) { throw 'Single EXE launch failed' }
+          Copy-Item single-file-screenshot.png LoliaBloom-screenshot.png -Force
       - uses: actions/upload-artifact@v4
         with:
           name: LoliaBloom-win-x64
           path: |
+            LoliaBloom-win-x64.exe
             LoliaBloom-win-x64.zip
             LoliaBloom-screenshot.png
           if-no-files-found: error
-      - name: Publish v0.4.4
+      - name: Publish v0.5.0
         env:
           GH_TOKEN: ${{ github.token }}
         shell: pwsh
         run: |
-          gh release view v0.4.4 *> $null
-          if ($LASTEXITCODE -eq 0) { throw 'v0.4.4 already exists; refusing to replace it.' }
-          gh release create v0.4.4 LoliaBloom-win-x64.zip LoliaBloom-screenshot.png --target '${{ github.sha }}' --title '洛链绽放 · Lolia Bloom v0.4.4' --notes 'Fixes background service installation and synchronization diagnostics. Uses Windows administrator identity checks, waits for service stop/start, verifies communication after installation, serializes GUI IPC and reports missing/stopped/unresponsive service states. Keeps the registered OAuth client and existing tunnel features.'
+          gh release view v0.5.0 *> $null
+          if ($LASTEXITCODE -eq 0) { throw 'v0.5.0 already exists; refusing to replace it.' }
+          gh release create v0.5.0 LoliaBloom-win-x64.exe LoliaBloom-win-x64.zip LoliaBloom-screenshot.png --target '${{ github.sha }}' --title '洛链绽放 · Lolia Bloom v0.5.0' --notes 'Adds a branded app icon, a self-contained single EXE launcher, and independent official FRP updates with SHA256 validation and rollback. The single EXE automatically prepares versioned runtime files; reinstalling the service preserves newer FRP versions. Includes background service installation and timeout fixes. Check-in remains restricted by the official OAuth policy.'
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
