@@ -20,7 +20,7 @@ jobs:
       - name: Test API contracts
         shell: pwsh
         run: |
-          dotnet run --project Lolia.Tests/Lolia.Tests.csproj -c Release
+          dotnet run --project Lolia.Tests/Lolia.Tests.csproj -c Release -- --network-test
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
       - name: Build and publish Windows x64
         shell: pwsh
@@ -98,6 +98,8 @@ jobs:
           if (-not $single.WaitForExit(90000)) { $single.Kill(); throw 'Single EXE startup timed out' }
           if ($single.ExitCode -ne 0 -or -not (Test-Path single-file-screenshot.png)) { throw 'Single EXE launch failed' }
           Copy-Item single-file-screenshot.png LoliaBloom-screenshot.png -Force
+          $create = Start-Process (Join-Path $PWD 'LoliaBloom-win-x64.exe') -ArgumentList '--self-test','--create-screenshot',(Join-Path $PWD 'LoliaBloom-create.png') -PassThru
+          if (-not $create.WaitForExit(90000) -or $create.ExitCode -ne 0 -or -not (Test-Path LoliaBloom-create.png)) { throw 'Create window launch failed' }
       - uses: actions/upload-artifact@v4
         with:
           name: LoliaBloom-win-x64
@@ -105,13 +107,14 @@ jobs:
             LoliaBloom-win-x64.exe
             LoliaBloom-win-x64.zip
             LoliaBloom-screenshot.png
+            LoliaBloom-create.png
           if-no-files-found: error
-      - name: Publish v0.5.0
+      - name: Publish v0.6.0
         env:
           GH_TOKEN: ${{ github.token }}
         shell: pwsh
         run: |
-          gh release view v0.5.0 *> $null
-          if ($LASTEXITCODE -eq 0) { throw 'v0.5.0 already exists; refusing to replace it.' }
-          gh release create v0.5.0 LoliaBloom-win-x64.exe LoliaBloom-win-x64.zip LoliaBloom-screenshot.png --target '${{ github.sha }}' --title '洛链绽放 · Lolia Bloom v0.5.0' --notes 'Adds a branded app icon, a self-contained single EXE launcher, and independent official FRP updates with SHA256 validation and rollback. The single EXE automatically prepares versioned runtime files; reinstalling the service preserves newer FRP versions. Includes background service installation and timeout fixes. Check-in remains restricted by the official OAuth policy.'
+          gh release view v0.6.0 *> $null
+          if ($LASTEXITCODE -eq 0) { throw 'v0.6.0 already exists; refusing to replace it.' }
+          gh release create v0.6.0 LoliaBloom-win-x64.exe LoliaBloom-win-x64.zip LoliaBloom-screenshot.png LoliaBloom-create.png --target '${{ github.sha }}' --title '洛链绽放 · Lolia Bloom v0.6.0' --notes 'Redesigned pink-and-plum workspace, custom title bar, searchable node cards with region/online/protocol filtering, one-click access address copying and official website check-in. Adds per-process local FRP network rates using Windows ETW; excludes loopback/backend traffic and retains separate platform totals. Includes single EXE and verified FRP updates.'
           if ($LASTEXITCODE) { exit $LASTEXITCODE }

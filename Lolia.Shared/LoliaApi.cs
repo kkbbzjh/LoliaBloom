@@ -5,7 +5,7 @@ using System.Text.Json;
 namespace Lolia.Shared;
 
 public sealed record CloudTunnel(string Id,string CloudName,string Label,string Type,string Node,string LocalAddress,string RemoteAddress,string? Remark);
-public sealed record CloudNode(int Id,string Name,string Status,string[] Protocols,bool NeedKyc,bool BeianRequired) {
+public sealed record CloudNode(int Id,string Name,string Status,string[] Protocols,bool NeedKyc,bool BeianRequired,string Region="") {
  public string Display=>$"{Name} · {Status}"+(NeedKyc?" · 需实名":"")+(BeianRequired?" · 域名需备案":"");
 }
 public sealed record TrafficSample(long In,long Out,DateTimeOffset? UpdatedAt);
@@ -56,7 +56,7 @@ public sealed class LoliaApi(HttpClient http,Func<Task<string>> getToken) {
   var result=new List<CloudNode>();
   for(int page=1;page<=100;page++){
    var d=await Request(HttpMethod.Post,"/user/nodes",new{page,limit=1000});var a=d.GetProperty("nodes");
-   result.AddRange(a.EnumerateArray().Select(x=>new CloudNode(x.GetProperty("id").GetInt32(),Str(x,"name")??"",Str(x,"status")??"",x.GetProperty("supported_protocols").EnumerateArray().Select(p=>p.GetString()!).ToArray(),x.TryGetProperty("need_kyc",out var k)&&k.GetBoolean(),x.TryGetProperty("beian_required",out var b)&&b.GetBoolean())));
+   result.AddRange(a.EnumerateArray().Select(x=>new CloudNode(x.GetProperty("id").GetInt32(),Str(x,"name")??"",Str(x,"status")??"",x.GetProperty("supported_protocols").EnumerateArray().Select(p=>p.GetString()!).ToArray(),x.TryGetProperty("need_kyc",out var k)&&k.GetBoolean(),x.TryGetProperty("beian_required",out var b)&&b.GetBoolean(),Str(x,"region_code")??"")));
    if(a.GetArrayLength()==0||result.Count>=d.GetProperty("total").GetInt32())return result;
   }
   throw new InvalidOperationException("节点列表分页超过安全上限");

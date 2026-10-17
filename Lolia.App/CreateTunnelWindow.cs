@@ -1,31 +1,38 @@
 using System.Net;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Media;
 using Lolia.Shared;
 namespace Lolia.App;
-sealed class CreateTunnelWindow:Window {
- readonly LoliaApi api;
- readonly ComboBox nodes=new(){DisplayMemberPath="Display",MinWidth=410};
- readonly ComboBox protocol=new(){ItemsSource=new[]{"tcp","udp","http","https"},SelectedIndex=0};
- readonly TextBox ip=new(){Text="127.0.0.1"},port=new(){Text="80"},remote=new(){Text=""},domain=new(),remark=new();
- readonly TextBlock help=new(){TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,12,0,8)};
- readonly Button create=new(){Content="创建隧道"};
+public partial class CreateTunnelWindow:ChromeWindow {
+ readonly LoliaApi api;readonly List<CloudNode> options;
  public bool Created{get;private set;}
- public CreateTunnelWindow(LoliaApi client,List<CloudNode> options){
-  api=client;Title="创建云端隧道 · 洛链绽放";Width=550;Height=670;ResizeMode=ResizeMode.NoResize;WindowStartupLocation=WindowStartupLocation.CenterOwner;Background=System.Windows.Media.Brushes.Snow;
-  var root=new StackPanel{Margin=new Thickness(22)};Content=root;
-  void Field(string label,UIElement control){root.Children.Add(new TextBlock{Text=label,Margin=new Thickness(0,9,0,4)});root.Children.Add(control);}
-  Field("节点",nodes);nodes.ItemsSource=options;nodes.SelectedIndex=options.Count>0?0:-1;
-  Field("协议",protocol);Field("本地 IP",ip);Field("本地端口（1–65535）",port);Field("远程端口（TCP/UDP 留空自动分配）",remote);Field("自定义域名（HTTP/HTTPS 必填，需在控制台验证）",domain);Field("备注",remark);
-  root.Children.Add(help);root.Children.Add(create);
-  void Update(){var web=protocol.SelectedItem is "http" or "https";domain.IsEnabled=web;remote.IsEnabled=!web;help.Text=web?"域名必须已加入并通过官方白名单验证；节点要求备案时还需 ICP 备案。":"远程端口留空，由节点自动分配。创建需要账号已绑定 QQ；实名要求由节点决定。";}
-  protocol.SelectionChanged+=(_,_)=>Update();Update();create.Click+=async(_,_)=>await Create();
+ string Protocol=>(string)((ComboBoxItem)protocol.SelectedItem).Tag;
+ public CreateTunnelWindow(LoliaApi client,List<CloudNode> choices){
+  InitializeComponent();api=client;options=choices;
+  region.ItemsSource=new[]{"全部地区"}.Concat(options.Select(n=>n.Region).Where(r=>!string.IsNullOrWhiteSpace(r)).Distinct().OrderBy(r=>r)).ToList();region.SelectedIndex=0;
+  search.TextChanged+=(_,_)=>Filter();region.SelectionChanged+=(_,_)=>Filter();onlineOnly.Checked+=(_,_)=>Filter();onlineOnly.Unchecked+=(_,_)=>Filter();
+  protocol.SelectionChanged+=(_,_)=>{Update();Filter();};
+  NodeList.SelectionChanged+=(_,_)=>SelectionInfo.Text=NodeList.SelectedItem is NodeChoice n?$"已选择  {n.Name} · {n.Node.Region}":"请选择一个节点";
+  create.Click+=async(_,_)=>await Create();Update();Filter();
+ }
+ void Update(){var web=Protocol is "http" or "https";domain.IsEnabled=web;remote.IsEnabled=!web;help.Text=web?"域名必须已通过官方白名单验证；备案节点还需要 ICP 备案。":"创建需已绑定 QQ；部分节点需要实名认证。";}
+ void Filter(){
+  var selected=(NodeList.SelectedItem as NodeChoice)?.Node.Id;var query=search.Text.Trim();var area=region.SelectedItem as string;
+  var rows=options.Where(n=>n.Protocols.Contains(Protocol)&&(onlineOnly.IsChecked!=true||n.Status is "online" or "authenticated")&&(area is null or "全部地区"||n.Region==area)&&(query.Length==0||n.Name.Contains(query,StringComparison.OrdinalIgnoreCase)||n.Region.Contains(query,StringComparison.OrdinalIgnoreCase))).OrderByDescending(n=>n.Status is "online" or "authenticated").ThenBy(n=>n.Name).Select(n=>new NodeChoice(n)).ToList();
+  NodeList.ItemsSource=rows;NodeList.SelectedItem=rows.FirstOrDefault(n=>n.Node.Id==selected)??rows.FirstOrDefault();EmptyNodes.Visibility=rows.Count==0?Visibility.Visible:Visibility.Collapsed;
+ }
+ public sealed record NodeChoice(CloudNode Node){
+  public string Name=>Node.Name;public string StatusText=>Node.Status is "online" or "authenticated"?"在线":"离线";
+  public Brush StatusBrush=>Node.Status is "online" or "authenticated"?new SolidColorBrush(Color.FromRgb(54,170,128)):new SolidColorBrush(Color.FromRgb(220,95,112));
+  public string Subtitle=>Node.Region+" · "+string.Join(" / ",Node.Protocols.Select(p=>p.ToUpperInvariant()))+(Node.NeedKyc?" · 需实名":"")+(Node.BeianRequired?" · 需备案":"");
  }
  async Task Create(){
   create.IsEnabled=false;
   try{
-   if(nodes.SelectedItem is not CloudNode node)throw new Exception("请选择节点");
-   var type=(string)protocol.SelectedItem;
+   if(NodeList.SelectedItem is not NodeChoice chosen)throw new Exception("请选择节点");
+   var node=chosen.Node;
+   var type=Protocol;
    if(!node.Protocols.Contains(type))throw new Exception("所选节点不支持该协议，请更换节点");
    if(node.Status is not ("online" or "authenticated"))throw new Exception("该节点当前离线，请更换节点");
    if(!IPAddress.TryParse(ip.Text.Trim(),out _))throw new Exception("请输入合法本地 IP 地址");

@@ -11,7 +11,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Diagnostics;
 namespace Lolia.App;
-public partial class MainWindow:Window {
+public partial class MainWindow:ChromeWindow {
  SavedSession? session=SessionStore.Load();
  const string Authorize="https://dash.lolia.link/oauth/authorize";
  const string TokenUrl="https://api.lolia.link/api/v1/oauth2/token";
@@ -20,21 +20,17 @@ public partial class MainWindow:Window {
  readonly SemaphoreSlim authGate=new(1,1);
  readonly SemaphoreSlim pipeGate=new(1,1);
  bool installingService;
- readonly System.Windows.Threading.DispatcherTimer poller=new(){Interval=TimeSpan.FromSeconds(5)};
- readonly TrafficSampler sampler=new();
+ readonly System.Windows.Threading.DispatcherTimer poller=new(){Interval=TimeSpan.FromSeconds(1)};
+ readonly Dictionary<string,TrafficSample> cloudTotals=new();
+ bool cloudRefreshing;
+ DateTimeOffset nextCloudPoll=DateTimeOffset.MinValue;
  readonly Dictionary<string,CloudTunnel> cloud=new();
  LoliaApi api=null!;
- bool refreshing,signingIn,autoCheckin,checkingIn;
- DateTimeOffset nextUserCheck=DateTimeOffset.MinValue,lastAutoAttempt=DateTimeOffset.MinValue;
- readonly string settingsPath=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"LoliaBloom","auto-checkin.txt");
+ bool refreshing,signingIn;
  public MainWindow(){
   InitializeComponent();api=new LoliaApi(http,GetAccessToken);
-  autoCheckin=File.Exists(settingsPath)&&File.ReadAllText(settingsPath)=="true";
-  AutoCheckin.IsChecked=autoCheckin;
-  AutoCheckin.Checked+=(_,_)=>SaveAuto(true);AutoCheckin.Unchecked+=(_,_)=>SaveAuto(false);
   Loaded+=async(_,_)=>{if(session!=null)await Safe(Sync);else await Refresh();poller.Tick+=async(_,_)=>await Refresh();poller.Start();};Closed+=(_,_)=>poller.Stop();
  }
- void SaveAuto(bool enabled){autoCheckin=enabled;Directory.CreateDirectory(Path.GetDirectoryName(settingsPath)!);File.WriteAllText(settingsPath,enabled?"true":"false");nextUserCheck=DateTimeOffset.MinValue;}
  async Task<string> GetAccessToken(){
   await authGate.WaitAsync();
   try{
@@ -79,25 +75,29 @@ public partial class MainWindow:Window {
    string serviceStatus;
    try{var r=await Send(new("list"));if(!r.Ok)throw new Exception(r.Message);list=JsonSerializer.Deserialize<List<TunnelRow>>(r.Data!,Paths.Json)??new();serviceStatus="后台服务已连接";}
    catch(Exception serviceError){list=cloud.Values.Select(t=>new TunnelRow{Id=t.Id,Name=t.Label,Type=t.Type,Node=t.Node,LocalAddress=t.LocalAddress,RemoteAddress=t.RemoteAddress,Description=t.Remark}).ToList();serviceStatus=serviceError.Message;}
-   var errors=new List<string>();
-   if(session!=null){
-    // Sequential polling bounds load; cumulative counters are sampled using server timestamps.
-    foreach(var t in list){
-     if(!cloud.TryGetValue(t.Id,out var c))continue;
-     try{var sample=await api.Traffic(c.CloudName);var rate=sampler.Update(c.CloudName,sample);t.TotalBytesIn=sample.In;t.TotalBytesOut=sample.Out;t.DownloadBytesPerSecond=rate.In;t.UploadBytesPerSecond=rate.Out;t.MetricsSource="官方累计流量；速度按服务端更新时间差分估算";}
-     catch(Exception e){t.MetricsSource=e.Message;errors.Add("流量："+e.Message);break;}
-    }
-    if(DateTimeOffset.UtcNow>=nextUserCheck){
-     nextUserCheck=DateTimeOffset.UtcNow.AddMinutes(1);
-     try{await UpdateCheckin();}catch(Exception e){CheckinStatus.Text="签到状态查询失败："+e.Message;}
-    }
-   }
+   foreach(var t in list){if(cloudTotals.TryGetValue(t.Id,out var total)){t.TotalBytesIn=total.In;t.TotalBytesOut=total.Out;}}
+   if(session!=null&&!cloudRefreshing&&DateTimeOffset.UtcNow>=nextCloudPoll)_=RefreshCloudData();
    var selected=(TunnelGrid.SelectedItem as TunnelRow)?.Id;TunnelGrid.ItemsSource=list;TunnelGrid.SelectedItem=list.FirstOrDefault(t=>t.Id==selected);
-   Status.Text=serviceStatus+$" · {list.Count} 条隧道 · {DateTime.Now:HH:mm:ss}"+(errors.Count>0?" · "+errors[0]:"");
+   GlobalDownload.Text=list.Any(t=>t.DownloadBytesPerSecond!=null)?TunnelRow.Format(list.Sum(t=>t.DownloadBytesPerSecond??0),true):"—";
+   GlobalUpload.Text=list.Any(t=>t.UploadBytesPerSecond!=null)?TunnelRow.Format(list.Sum(t=>t.UploadBytesPerSecond??0),true):"—";
+   RunningCount.Text=$"{list.Count(t=>t.Running)} / {list.Count}";
+   EmptyState.Visibility=list.Count==0?Visibility.Visible:Visibility.Collapsed;
+   Status.Text=serviceStatus+$" · {DateTime.Now:HH:mm:ss}";
   }catch(Exception e){Status.Text=e.Message;}finally{refreshing=false;}
  }
+ async Task RefreshCloudData(){
+  if(cloudRefreshing)return;cloudRefreshing=true;nextCloudPoll=DateTimeOffset.UtcNow.AddSeconds(30);
+  try{
+   using var limit=new SemaphoreSlim(4);
+   var requests=cloud.Values.ToArray().Select(async c=>{
+    await limit.WaitAsync();try{return (Id:c.Id,Sample:await api.Traffic(c.CloudName));}finally{limit.Release();}
+   });
+   var samples=await Task.WhenAll(requests);foreach(var item in samples)cloudTotals[item.Id]=item.Sample;
+   var user=await api.User();CheckinStatus.Text=user.TryGetProperty("today_checked",out var status)&&status.GetBoolean()?"今日已签到，明天也要记得来。":"今日还未签到，去官网领取流量。";
+  }catch(Exception e){CheckinStatus.Text="平台状态："+e.Message;}finally{cloudRefreshing=false;}
+ }
  async Task Safe(Func<Task> f){try{await f();}catch(Exception e){MessageBox.Show(e.Message,"洛链绽放",MessageBoxButton.OK,MessageBoxImage.Warning);}}
- async void Refresh_Click(object s,RoutedEventArgs e){nextUserCheck=DateTimeOffset.MinValue;await Safe(Refresh);}
+ async void Refresh_Click(object s,RoutedEventArgs e){nextCloudPoll=DateTimeOffset.MinValue;await Safe(Refresh);}
  async void Login_Click(object s,RoutedEventArgs e)=>await Safe(Login);
  // Public OAuth application identifier; not a client secret.
  const string DefaultClientId="3k9iwlin05pwdv7g";
@@ -118,28 +118,26 @@ public partial class MainWindow:Window {
    var code=await listener.WaitForCode(state,timeout.Token);
    await authGate.WaitAsync();
    try{session=await Exchange(new(){{"grant_type","authorization_code"},{"code",code},{"client_id",clientId},{"redirect_uri",Redirect},{"code_verifier",verifier}},clientId);SessionStore.Save(session);}finally{authGate.Release();}
-   cloud.Clear();sampler.Clear();nextUserCheck=DateTimeOffset.MinValue;await Sync();
+   cloud.Clear();cloudTotals.Clear();nextCloudPoll=DateTimeOffset.MinValue;await Sync();
   }finally{signingIn=false;}
  }
- protected override void OnContentRendered(EventArgs e) {
-  base.OnContentRendered(e);
-  var args=Environment.GetCommandLineArgs();
-  var index=Array.IndexOf(args,"--screenshot");
-  if(index<0||index+1>=args.Length)return;
-  Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.ApplicationIdle,new System.Action(()=>{
-   UpdateLayout();
-   var bitmap=new System.Windows.Media.Imaging.RenderTargetBitmap((int)ActualWidth,(int)ActualHeight,96,96,System.Windows.Media.PixelFormats.Pbgra32);
-   bitmap.Render(this);
-   var encoder=new System.Windows.Media.Imaging.PngBitmapEncoder();
-   encoder.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(bitmap));
-   using(var output=File.Create(args[index+1]))encoder.Save(output);
-   System.Windows.Application.Current.Shutdown();
-  }));
+ protected override void OnContentRendered(EventArgs e){
+  base.OnContentRendered(e);var args=Environment.GetCommandLineArgs();
+  var createIndex=Array.IndexOf(args,"--create-screenshot");
+  if(createIndex>=0&&createIndex+1<args.Length){
+   var nodes=new List<CloudNode>{new(1,"广州 · 精品线路（示例）","online",new[]{"tcp","udp","http","https"},false,true,"CN"),new(2,"香港 · 轻盈节点（示例）","online",new[]{"tcp","udp","http","https"},false,false,"HK"),new(3,"东京 · 备用节点（示例）","offline",new[]{"tcp","udp"},true,false,"JP")};
+   var dialog=new CreateTunnelWindow(api,nodes){Owner=this};dialog.ContentRendered+=(_,_)=>dialog.Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.ApplicationIdle,new System.Action(()=>{Capture(dialog,args[createIndex+1]);System.Windows.Application.Current.Shutdown();}));dialog.Show();return;
+  }
+  var index=Array.IndexOf(args,"--screenshot");if(index<0||index+1>=args.Length)return;
+  Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.ApplicationIdle,new System.Action(()=>{Capture(this,args[index+1]);System.Windows.Application.Current.Shutdown();}));
+ }
+ static void Capture(Window window,string path){
+  window.UpdateLayout();var bitmap=new System.Windows.Media.Imaging.RenderTargetBitmap((int)window.ActualWidth,(int)window.ActualHeight,96,96,System.Windows.Media.PixelFormats.Pbgra32);bitmap.Render(window);var encoder=new System.Windows.Media.Imaging.PngBitmapEncoder();encoder.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(bitmap));using var output=File.Create(path);encoder.Save(output);
  }
  static string Base64(byte[] bytes)=>Convert.ToBase64String(bytes).TrimEnd('=').Replace('+','-').Replace('/','_');
  async void Sync_Click(object s,RoutedEventArgs e)=>await Safe(Sync);
  async Task Sync(){
-  var remote=await api.Tunnels();cloud.Clear();sampler.Clear();foreach(var t in remote)cloud[t.Id]=t;
+  var remote=await api.Tunnels();cloud.Clear();cloudTotals.Clear();foreach(var t in remote)cloud[t.Id]=t;
   var list=new List<Tunnel>();var failures=new List<string>();
   foreach(var t in remote){string? token=null;try{token=await api.TunnelToken(t.CloudName);}catch(Exception e){failures.Add(t.Label+"："+e.Message);}list.Add(new(t.Id,t.Label,false,t.Type,t.Node,t.LocalAddress,t.RemoteAddress,t.Remark,token));}
   try{var r=await Send(new("sync",Value:JsonSerializer.Serialize(list,Paths.Json)));if(!r.Ok)throw new Exception(r.Message);}catch(Exception e){failures.Add("云端同步成功，后台服务同步失败："+e.Message);}
@@ -194,30 +192,23 @@ public partial class MainWindow:Window {
  void Details_Click(object s,RoutedEventArgs e){
   try{var t=Selected();MessageBox.Show($"名称：{t.Name}\nID：{t.Id}\n协议：{t.Type??"—"}\n节点：{t.Node??"—"}\n本地：{t.LocalAddress??"—"}\n远端：{t.RemoteAddress??"—"}\n状态：{t.StateText}\n开机连接：{(t.AutoStart?"是":"否")}\n下载速度：{t.DownloadText}\n上传速度：{t.UploadText}\n累计下载：{t.TotalInText}\n累计上传：{t.TotalOutText}\n说明：{t.Description??"—"}\n\n流量来源：{t.MetricsSource??"未接入官方流量 API"}","隧道详情",MessageBoxButton.OK,MessageBoxImage.Information);}catch(Exception ex){MessageBox.Show(ex.Message);}
  }
- async Task UpdateCheckin(){
-  var u=await api.User();var checkedIn=u.TryGetProperty("today_checked",out var v)&&v.GetBoolean();
-  CheckinStatus.Text=checkedIn?"今日已签到":"今日未签到";
-  if(autoCheckin&&!checkedIn&&DateTimeOffset.UtcNow-lastAutoAttempt>TimeSpan.FromHours(1)){
-   lastAutoAttempt=DateTimeOffset.UtcNow;
-   try{await Checkin();}catch(Exception e){CheckinStatus.Text="自动签到失败："+e.Message;}
-  }
+ void Checkin_Click(object s,RoutedEventArgs e){
+  try{Process.Start(new ProcessStartInfo("https://dash.lolia.link/dash"){UseShellExecute=true});CheckinStatus.Text="已打开官网，在首页点击签到即可。";}catch(Exception ex){MessageBox.Show(ex.Message);}
  }
- async Task Checkin(){
-  if(checkingIn)return;checkingIn=true;
-  try{var data=await api.Request(HttpMethod.Post,"/user/checkin");
-  CheckinStatus.Text="签到成功"+(LoliaApi.Str(data,"traffic_gb") is { } gb?$" · 获得 {gb} GB 流量":"");nextUserCheck=DateTimeOffset.UtcNow.AddMinutes(1);
-  }finally{checkingIn=false;}
- }
- async void Checkin_Click(object s,RoutedEventArgs e)=>await Safe(Checkin);
+ void CopyAddress_Click(object s,RoutedEventArgs e){if(s is System.Windows.Controls.Button b&&b.Tag is string value)CopyAddress(value);}
+ void CopySelected_Click(object s,RoutedEventArgs e){try{CopyAddress(Selected().RemoteAddress);}catch(Exception ex){MessageBox.Show(ex.Message);}}
+ void CopyAddress(string? value){if(string.IsNullOrWhiteSpace(value))return;try{Clipboard.SetText(value);Status.Text="已复制访问地址："+value;}catch(Exception ex){MessageBox.Show("暂时无法写入剪贴板："+ex.Message);}}
  async void Create_Click(object s,RoutedEventArgs e)=>await Safe(async()=>{
   var options=await api.Nodes();var dialog=new CreateTunnelWindow(api,options){Owner=this};if(dialog.ShowDialog()==true&&dialog.Created)await Sync();
  });
  public sealed class TunnelRow{
  public string Id{get;set;}="";public string Name{get;set;}="";public bool AutoStart{get;set;}public bool Running{get;set;}
  public string? Type{get;set;}public string? Node{get;set;}public string? LocalAddress{get;set;}public string? RemoteAddress{get;set;}public string? Description{get;set;}
- public long? TotalBytesIn{get;set;}public long? TotalBytesOut{get;set;}public double? DownloadBytesPerSecond{get;set;}public double? UploadBytesPerSecond{get;set;}public string? MetricsSource{get;set;}
+ public long? TotalBytesIn{get;set;}public long? TotalBytesOut{get;set;}public double? DownloadBytesPerSecond{get;set;}public double? UploadBytesPerSecond{get;set;}public string? MetricsSource{get;set;}public long? LocalBytesIn{get;set;}public long? LocalBytesOut{get;set;}
+ public System.Windows.Media.Brush StateBrush=>Running?System.Windows.Media.Brushes.MediumSeaGreen:System.Windows.Media.Brushes.IndianRed;
+ public System.Windows.Media.Brush ActionBrush=>Running?new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(144,121,145)):new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(219,67,133));
  public string StateText=>Running?"运行中":"已停止";public string ToggleText=>Running?"停止":"启动";
- static string Format(double? n,bool rate=false){if(n is null)return "—";var v=n.Value;string[] u={"B","KB","MB","GB","TB"};int i=0;while(v>=1024&&i<u.Length-1){v/=1024;i++;}return $"{v:0.##} {u[i]}"+(rate?"/s":"");}
+ public static string Format(double? n,bool rate=false){if(n is null)return "—";var v=n.Value;string[] u={"B","KB","MB","GB","TB"};int i=0;while(v>=1024&&i<u.Length-1){v/=1024;i++;}return $"{v:0.##} {u[i]}"+(rate?"/s":"");}
  public string DownloadText=>Format(DownloadBytesPerSecond,true);public string UploadText=>Format(UploadBytesPerSecond,true);
  public string TotalInText=>Format(TotalBytesIn);public string TotalOutText=>Format(TotalBytesOut);
  }

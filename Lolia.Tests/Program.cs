@@ -52,6 +52,17 @@ if(args.Length==3&&args[0]=="--engine-test"){
   Console.WriteLine("PASS: corrupt FRP update rejected before interruption; failed restart rolls back engine and resumes tunnels");
  }finally{Directory.Delete(folder,true);}
 }
+using(var monitor=new Lolia.Service.LocalTrafficMonitor()){
+ monitor.Register(12345,"a","192.168.1.10:8080");
+ monitor.Observe(12345,true,100,IPAddress.Parse("8.8.8.8"),7000);monitor.Observe(12345,false,60,IPAddress.Parse("8.8.8.8"),7000);
+ monitor.Observe(12345,true,999,IPAddress.Loopback,5000);monitor.Observe(12345,true,999,IPAddress.Parse("192.168.1.10"),8080);monitor.Observe(99999,true,999,IPAddress.Parse("8.8.8.8"),7000);
+ var measured=monitor.Get("a",true);Assert(measured.Received==100&&measured.Sent==60,"local counters must exclude backend, loopback and other processes");monitor.Unregister(12345);monitor.Observe(12345,true,999,IPAddress.Parse("8.8.8.8"),7000);Assert(monitor.Get("a",false).Received==100,"stopped process must not count traffic");
+}
+if(args.Contains("--network-test")){
+ using var monitor=new Lolia.Service.LocalTrafficMonitor();monitor.Start();monitor.Register(Environment.ProcessId,"real-test",null);
+ using var web=new HttpClient(new HttpClientHandler{UseProxy=false}){Timeout=TimeSpan.FromSeconds(20)};web.DefaultRequestHeaders.UserAgent.ParseAdd("LoliaBloom-Test/0.6.0");await web.GetStringAsync("https://api.github.com/repos/Lolia-FRP/lolia-frp");
+ await Task.Delay(2500);var measured=monitor.Get("real-test",true);Assert(measured.Received>0&&measured.Sent>0,"real ETW network capture: "+measured.Source);Console.WriteLine($"PASS: real ETW traffic captured {measured.Received} received / {measured.Sent} sent");
+}
 Console.WriteLine("PASS: pagination, request methods, protocol parsing, credentials, HTTP 201, API errors, traffic sampling");
 static HttpResponseMessage Json(string data,HttpStatusCode code=HttpStatusCode.OK)=>new(code){Content=new StringContent(data,Encoding.UTF8,"application/json")};
 sealed class Fake(Func<HttpRequestMessage,Task<HttpResponseMessage>> handle):HttpMessageHandler{protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage r,CancellationToken ct)=>handle(r);}
