@@ -46,7 +46,7 @@ sealed class Manager:BackgroundService {
   switch(c.Action){
    case "engine-check":{var info=await new EngineUpdater(RunningIds,Stop,Start).Check();return new(true,"OK",JsonSerializer.Serialize(info,Paths.Json));}
    case "engine-update":return new(true,await new EngineUpdater(RunningIds,Stop,Start).Update());
-   case "list": return new(true,"OK",JsonSerializer.Serialize(tunnels.Select(t=>{
+   case "list": return new(true,"OK:2",JsonSerializer.Serialize(tunnels.Select(t=>{
     var active=IsRunning(t.Id);var m=traffic.Get(t.Id,active);
     return new TunnelView(t.Id,t.Name,t.AutoStart,active,t.Type,t.Node,t.LocalAddress,t.RemoteAddress,t.Description,null,null,m.Download,m.Upload,m.Source,m.Received,m.Sent);
    }),Paths.Json));
