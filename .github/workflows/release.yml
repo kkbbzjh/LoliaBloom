@@ -1,0 +1,37 @@
+name: Build and Release Windows
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+permissions:
+  contents: write
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Publish Windows portable app
+        shell: pwsh
+        run: |
+          $project = Get-ChildItem -Recurse -Filter 'Lolia.Desktop.csproj' | Select-Object -First 1
+          if (-not $project) { throw 'Desktop project not found. Upload project source before releasing.' }
+          dotnet restore $project.FullName
+          dotnet publish $project.FullName -c Release -r win-x64 --self-contained true -p:PublishSingleFile=false -o "$env:RUNNER_TEMP\LoliaBloom"
+          $service = Get-ChildItem -Recurse -Filter 'Lolia.Service.csproj' | Select-Object -First 1
+          if (-not $service) { throw 'Windows Service project not found.' }
+          dotnet publish $service.FullName -c Release -r win-x64 --self-contained true -p:PublishSingleFile=false -o "$env:RUNNER_TEMP\LoliaBloom\Service"
+          Compress-Archive -Path "$env:RUNNER_TEMP\LoliaBloom\*" -DestinationPath "$env:GITHUB_WORKSPACE\LoliaBloom-win-x64.zip" -Force
+      - uses: actions/upload-artifact@v4
+        with:
+          name: LoliaBloom-win-x64
+          path: LoliaBloom-win-x64.zip
+      - name: Publish GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: pwsh
+        run: gh release create "${{ github.ref_name }}" LoliaBloom-win-x64.zip --generate-notes --title "Lolia Bloom ${{ github.ref_name }}"
