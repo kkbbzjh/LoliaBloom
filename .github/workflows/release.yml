@@ -8,7 +8,7 @@ permissions:
   contents: write
 concurrency:
   group: windows-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 jobs:
   windows:
     runs-on: windows-latest
@@ -65,7 +65,12 @@ jobs:
         run: |
           gh release view v0.4.0 *> $null
           if ($LASTEXITCODE -eq 0) {
-            throw 'v0.4.0 already exists; refusing to replace an existing release automatically.'
+            $tagSha = gh api repos/kkbbzjh/LoliaBloom/git/ref/tags/v0.4.0 --jq '.object.sha'
+            if ($tagSha -ne 'ce47e300a6159498a8b7a537aa57b57a47ad5376') { throw 'Existing release is not from this initial build; refusing replacement.' }
+            gh api --method PATCH repos/kkbbzjh/LoliaBloom/git/refs/tags/v0.4.0 -f sha='${{ github.sha }}' -F force=false
+            if ($LASTEXITCODE) { exit $LASTEXITCODE }
+            gh release upload v0.4.0 LoliaBloom-win-x64.zip LoliaBloom-screenshot.png --clobber
+            exit $LASTEXITCODE
           }
           gh release create v0.4.0 LoliaBloom-win-x64.zip LoliaBloom-screenshot.png --target '${{ github.sha }}' --title 'Lolia Bloom v0.4.0' --notes 'Windows x64 portable prototype. Includes one-click Windows Service installation. OAuth, tunnel API, check-in and traffic integrations still require live verification; see README.'
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
