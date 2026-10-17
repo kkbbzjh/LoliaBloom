@@ -19,7 +19,7 @@ sealed class Manager:BackgroundService {
  readonly object gate=new();
  List<Tunnel> tunnels=new();
  protected override async Task ExecuteAsync(CancellationToken ct) {
-  try { if(File.Exists(Paths.Tunnels)) tunnels=JsonSerializer.Deserialize<List<Tunnel>>(ProtectedData.Unprotect(await File.ReadAllBytesAsync(Paths.Tunnels,ct),null,DataProtectionScope.LocalMachine),Paths.Json)??new(); }catch{}
+  try { if(File.Exists(Paths.Tunnels)) {var bytes=await File.ReadAllBytesAsync(Paths.Tunnels,ct);tunnels=JsonSerializer.Deserialize<List<Tunnel>>(bytes.Length>0&&bytes[0]==(byte)'['?bytes:ProtectedData.Unprotect(bytes,null,DataProtectionScope.LocalMachine),Paths.Json)??new();} }catch{}
   foreach(var t in tunnels.Where(t=>t.AutoStart)) Start(t.Id);
   while(!ct.IsCancellationRequested){
    try{
@@ -46,7 +46,8 @@ sealed class Manager:BackgroundService {
     var incoming=JsonSerializer.Deserialize<List<Tunnel>>(c.Value??"[]",Paths.Json)??new();
     if(incoming.Select(t=>t.Id).Distinct().Count()!=incoming.Count||incoming.Count>10000||incoming.Any(t=>!System.Text.RegularExpressions.Regex.IsMatch(t.Id,@"^[0-9A-Za-z_-]{1,100}$")))return new(false,"Invalid tunnel IDs");
     var old=tunnels.ToDictionary(x=>x.Id);
-    tunnels=incoming.Select(t=>t with{AutoStart=old.TryGetValue(t.Id,out var v)&&v.AutoStart}).ToList();
+    foreach(var id in old.Keys.Except(incoming.Select(t=>t.Id)).ToArray())Stop(id);
+    tunnels=incoming.Select(t=>t with{AutoStart=old.TryGetValue(t.Id,out var v)&&v.AutoStart,Credential=t.Credential??(old.TryGetValue(t.Id,out var previous)?previous.Credential:null)}).ToList();
     await Save(ct);return new(true,$"Synced {tunnels.Count} tunnels");
    }
    case "auto":{

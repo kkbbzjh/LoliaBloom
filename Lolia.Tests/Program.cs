@@ -20,6 +20,13 @@ Assert((await api.Nodes())[0].Protocols.Contains("https"),"node protocol parsing
 try{await api.Request(HttpMethod.Post,"/user/checkin");throw new Exception("expected 403");}catch(InvalidOperationException e){Assert(e.Message.Contains("OAuth2 not supported"),"business errors must be visible");}
 var rate=new TrafficSampler();var t=DateTimeOffset.UtcNow;
 Assert(rate.Update("x",new(100,200,t)).In==null,"first sample must be unknown");Assert(rate.Update("x",new(110,220,t)).In==null,"unchanged server timestamp");Assert(rate.Update("x",new(210,420,t.AddSeconds(10))).In==10,"sample delta");Assert(rate.Update("x",new(0,0,t.AddSeconds(20))).Out==null,"reset counters");Assert(rate.Update("missing",new(0,0,null)).In==null,"missing server timestamp");
+using(var callback=new LoopbackAuthorization(0)){
+ using var timeout=new CancellationTokenSource(TimeSpan.FromSeconds(10));
+ var codeTask=callback.WaitForCode("expected-state",timeout.Token);
+ using var client=new HttpClient();
+ var bad=await client.GetAsync($"http://127.0.0.1:{callback.Port}/?code=bad&state=wrong");Assert(bad.StatusCode==HttpStatusCode.BadRequest,"callback state validation");
+ var good=await client.GetAsync($"http://127.0.0.1:{callback.Port}/?code=good-code&state=expected-state");Assert(good.IsSuccessStatusCode,"valid loopback callback");Assert(await codeTask=="good-code","authorization code");
+}
 Console.WriteLine("PASS: pagination, request methods, protocol parsing, credentials, HTTP 201, API errors, traffic sampling");
 static HttpResponseMessage Json(string data,HttpStatusCode code=HttpStatusCode.OK)=>new(code){Content=new StringContent(data,Encoding.UTF8,"application/json")};
 sealed class Fake(Func<HttpRequestMessage,Task<HttpResponseMessage>> handle):HttpMessageHandler{protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage r,CancellationToken ct)=>handle(r);}

@@ -99,15 +99,11 @@ public partial class MainWindow:Window {
   try{
    var clientId=GetClientId();
    var verifier=Base64(RandomNumberGenerator.GetBytes(32));var challenge=Base64(SHA256.HashData(Encoding.ASCII.GetBytes(verifier)));var state=Base64(RandomNumberGenerator.GetBytes(24));
-   using var listener=new HttpListener();listener.Prefixes.Add(Redirect+"/");listener.Start();
+   using var listener=new LoopbackAuthorization();
    var url=Authorize+"?response_type=code&client_id="+Uri.EscapeDataString(clientId)+"&redirect_uri="+Uri.EscapeDataString(Redirect)+"&scope="+Uri.EscapeDataString("user:read tunnel:read tunnel:write traffic:read node:read")+"&code_challenge_method=S256&code_challenge="+challenge+"&state="+state;
    Process.Start(new ProcessStartInfo(url){UseShellExecute=true});
    using var timeout=new CancellationTokenSource(TimeSpan.FromMinutes(3));
-   HttpListenerContext ctx;
-   while(true){ctx=await listener.GetContextAsync().WaitAsync(timeout.Token);if(ctx.Request.QueryString["state"]==state)break;ctx.Response.StatusCode=400;ctx.Response.Close();}
-   var code=ctx.Request.QueryString["code"];var error=ctx.Request.QueryString["error"];
-   var message=Encoding.UTF8.GetBytes("<html><meta charset='utf-8'><body>请返回洛链绽放查看授权结果。</body></html>");ctx.Response.ContentType="text/html; charset=utf-8";await ctx.Response.OutputStream.WriteAsync(message);ctx.Response.Close();
-   if(!string.IsNullOrEmpty(error)||string.IsNullOrEmpty(code))throw new Exception("官方授权未完成："+error);
+   var code=await listener.WaitForCode(state,timeout.Token);
    await authGate.WaitAsync();
    try{session=await Exchange(new(){{"grant_type","authorization_code"},{"code",code},{"client_id",clientId},{"redirect_uri",Redirect},{"code_verifier",verifier}},clientId);SessionStore.Save(session);}finally{authGate.Release();}
    cloud.Clear();sampler.Clear();nextUserCheck=DateTimeOffset.MinValue;await Sync();

@@ -46,15 +46,32 @@ jobs:
           if ($LASTEXITCODE) { throw 'Service installation failed' }
           try {
             (Get-Service LoliaBloomService).WaitForStatus('Running', [TimeSpan]::FromSeconds(30))
-            $pipe = [IO.Pipes.NamedPipeClientStream]::new('.', 'LoliaBloomPipe', [IO.Pipes.PipeDirection]::InOut)
-            $pipe.Connect(15000)
-            $writer = [IO.StreamWriter]::new($pipe)
-            $writer.AutoFlush = $true
-            $reader = [IO.StreamReader]::new($pipe)
-            $writer.WriteLine('{"action":"list"}')
-            $reply = $reader.ReadLineAsync().WaitAsync([TimeSpan]::FromSeconds(15)).GetAwaiter().GetResult() | ConvertFrom-Json
-            if (-not $reply.ok) { throw 'IPC request failed' }
-            $pipe.Dispose()
+            function Invoke-ServiceCommand($command) {
+              $pipe = [IO.Pipes.NamedPipeClientStream]::new('.', 'LoliaBloomPipe', [IO.Pipes.PipeDirection]::InOut)
+              $pipe.Connect(15000)
+              try {
+                $writer = [IO.StreamWriter]::new($pipe)
+                $writer.AutoFlush = $true
+                $reader = [IO.StreamReader]::new($pipe)
+                $writer.WriteLine(($command | ConvertTo-Json -Depth 10 -Compress))
+                $reply = $reader.ReadLineAsync().WaitAsync([TimeSpan]::FromSeconds(15)).GetAwaiter().GetResult() | ConvertFrom-Json
+                if (-not $reply.ok) { throw $reply.message }
+                return $reply
+              } finally { $pipe.Dispose() }
+            }
+            Invoke-ServiceCommand @{action='list'}
+            $tunnels = @(@{id='99999999';name='CI contract test';credential='ci-only-credential';autoStart=$false}) | ConvertTo-Json -AsArray -Compress
+            Invoke-ServiceCommand @{action='sync';value=$tunnels}
+            $saved = [IO.File]::ReadAllBytes("$env:ProgramData/LoliaBloom/tunnels.json")
+            if ([Text.Encoding]::UTF8.GetString($saved).Contains('ci-only-credential')) { throw 'Credential was saved without encryption' }
+            Stop-Service LoliaBloomService
+            Start-Service LoliaBloomService
+            (Get-Service LoliaBloomService).WaitForStatus('Running', [TimeSpan]::FromSeconds(30))
+            $reply = Invoke-ServiceCommand @{action='list'}
+            if ($reply.data.Contains('ci-only-credential')) { throw 'Credential leaked through list IPC' }
+            $items = $reply.data | ConvertFrom-Json
+            if (@($items).Count -ne 1 -or $items[0].id -ne '99999999') { throw 'Encrypted service persistence failed' }
+            Invoke-ServiceCommand @{action='sync';value='[]'}
           } finally {
             Stop-Service LoliaBloomService -ErrorAction SilentlyContinue
             sc.exe delete LoliaBloomService
@@ -70,12 +87,12 @@ jobs:
             LoliaBloom-win-x64.zip
             LoliaBloom-screenshot.png
           if-no-files-found: error
-      - name: Publish v0.4.1
+      - name: Publish v0.4.2
         env:
           GH_TOKEN: ${{ github.token }}
         shell: pwsh
         run: |
-          gh release view v0.4.1 *> $null
-          if ($LASTEXITCODE -eq 0) { throw 'v0.4.1 already exists; refusing to replace it.' }
-          gh release create v0.4.1 LoliaBloom-win-x64.zip LoliaBloom-screenshot.png --target '${{ github.sha }}' --title '洛链绽放 · Lolia Bloom v0.4.1' --notes 'Adds documented cloud tunnel creation (TCP/UDP/HTTP/HTTPS), paginated tunnel sync, encrypted saved login with token refresh, automatic tunnel credential sync, and official traffic counters with estimated rates. Adds the official dashboard check-in request and optional hourly checks while the app runs. Live account authorization and check-in OAuth compatibility require account verification.'
+          gh release view v0.4.2 *> $null
+          if ($LASTEXITCODE -eq 0) { throw 'v0.4.2 already exists; refusing to replace it.' }
+          gh release create v0.4.2 LoliaBloom-win-x64.zip LoliaBloom-screenshot.png --target '${{ github.sha }}' --title '洛链绽放 · Lolia Bloom v0.4.2' --notes 'Adds documented cloud tunnel creation (TCP/UDP/HTTP/HTTPS), paginated tunnel sync, encrypted saved login with token refresh, automatic tunnel credential sync, and official traffic counters with estimated rates. Adds the official dashboard check-in request and optional hourly checks while the app runs. Live account authorization and check-in OAuth compatibility require account verification.'
           if ($LASTEXITCODE) { exit $LASTEXITCODE }

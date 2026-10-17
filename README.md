@@ -4,7 +4,7 @@ A pink-themed Windows desktop client for managing Lolia FRP tunnels.
 
 [English](README.md) | [简体中文](README.zh-CN.md)
 
-![Lolia Bloom — Windows interface](https://github.com/kkbbzjh/LoliaBloom/releases/download/v0.4.1/LoliaBloom-screenshot.png)
+![Lolia Bloom — Windows interface](https://github.com/kkbbzjh/LoliaBloom/releases/download/v0.4.2/LoliaBloom-screenshot.png)
 
 ## Features
 
