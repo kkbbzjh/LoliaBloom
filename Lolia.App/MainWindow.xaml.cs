@@ -82,7 +82,11 @@ public partial class MainWindow:ChromeWindow {
     if(ready&&list.Any(t=>t.Running&&string.IsNullOrWhiteSpace(t.MetricsSource)))ready=false;
     ServiceGuide.Visibility=ready?Visibility.Collapsed:Visibility.Visible;
     ServiceButton.Content=ready?"✓ 后台服务已就绪":"① 安装 / 修复后台服务";
-    if(!ready&&!GuideTitle.Text.StartsWith("安装未完成",StringComparison.Ordinal)){GuideTitle.Text="先完成这一步，才能启动隧道";GuideDescription.Text=serviceStatus+"。点击上方按钮安装或修复，并允许管理员授权。";}
+    if(!ready&&!GuideTitle.Text.StartsWith("安装未完成",StringComparison.Ordinal)){
+     var state=ServiceState();
+     GuideTitle.Text=state=="尚未安装后台服务"?"第一次使用：请先安装后台服务":"后台服务需要更新或修复";
+     GuideDescription.Text=state=="尚未安装后台服务"?"点击上方紫色按钮，在 Windows 提示时选择“是”。安装完成后，就可以启动隧道了。":state=="running"?"点击上方按钮更新服务，完成后即可使用本地实时速率。":"点击上方按钮启动或修复后台服务，完成后即可启动隧道。";
+    }
    }
    var selected=(TunnelGrid.SelectedItem as TunnelRow)?.Id;TunnelGrid.ItemsSource=list;TunnelGrid.SelectedItem=list.FirstOrDefault(t=>t.Id==selected);
    GlobalDownload.Text=list.Any(t=>t.DownloadBytesPerSecond!=null)?TunnelRow.Format(list.Sum(t=>t.DownloadBytesPerSecond??0),true):"—";
