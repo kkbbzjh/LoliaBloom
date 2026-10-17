@@ -4,7 +4,7 @@
 
 [English](README.md) | [简体中文](README.zh-CN.md)
 
-![Lolia Bloom Windows 实际界面](https://github.com/kkbbzjh/LoliaBloom/releases/download/v0.4.3/LoliaBloom-screenshot.png)
+![Lolia Bloom Windows 实际界面](https://github.com/kkbbzjh/LoliaBloom/releases/download/v0.4.4/LoliaBloom-screenshot.png)
 
 ## 功能特色
 

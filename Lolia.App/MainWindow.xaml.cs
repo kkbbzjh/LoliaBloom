@@ -1,4 +1,5 @@
 using System.IO;
+using System.ServiceProcess;
 using System.Net.Http;
 using System.Windows;
 using Lolia.Shared;
@@ -17,6 +18,8 @@ public partial class MainWindow:Window {
  const string Redirect="http://localhost:1145";
  readonly HttpClient http=new(){Timeout=TimeSpan.FromSeconds(20)};
  readonly SemaphoreSlim authGate=new(1,1);
+ readonly SemaphoreSlim pipeGate=new(1,1);
+ bool installingService;
  readonly System.Windows.Threading.DispatcherTimer poller=new(){Interval=TimeSpan.FromSeconds(5)};
  readonly TrafficSampler sampler=new();
  readonly Dictionary<string,CloudTunnel> cloud=new();
@@ -47,21 +50,35 @@ public partial class MainWindow:Window {
   if(!resp.IsSuccessStatusCode)throw new Exception(LoliaApi.Str(x,"error_description")??"授权失败，请重新登录");
   return new(id,x.GetProperty("access_token").GetString()!,LoliaApi.Str(x,"refresh_token")??oldRefresh,DateTimeOffset.UtcNow.AddSeconds(x.GetProperty("expires_in").GetInt32()));
  }
+ string ServiceState(){
+  try{using var service=new ServiceController("LoliaBloomService");return service.Status==ServiceControllerStatus.Running?"running":"服务已安装但未运行（"+service.Status+"）";}
+  catch(InvalidOperationException){return "尚未安装后台服务";}catch(Exception e){return "无法查询服务状态："+e.Message;}
+ }
  async Task<Reply> Send(Command c){
-  using var pipe=new NamedPipeClientStream(".","LoliaBloomPipe",PipeDirection.InOut,PipeOptions.Asynchronous);
-  using var timeout=new CancellationTokenSource(TimeSpan.FromSeconds(6));await pipe.ConnectAsync(timeout.Token);
-  using var writer=new StreamWriter(pipe,Encoding.UTF8,leaveOpen:true){AutoFlush=true};
-  using var reader=new StreamReader(pipe,Encoding.UTF8,leaveOpen:true);
-  await writer.WriteLineAsync(JsonSerializer.Serialize(c,Paths.Json));
-  return JsonSerializer.Deserialize<Reply>((await reader.ReadLineAsync(timeout.Token))!,Paths.Json)!;
+  await pipeGate.WaitAsync();
+  try{
+   var state=ServiceState();if(state!="running")throw new InvalidOperationException(state+"。请点击一键安装后台服务，确认管理员授权。");
+   using var pipe=new NamedPipeClientStream(".","LoliaBloomPipe",PipeDirection.InOut,PipeOptions.Asynchronous);
+   using var timeout=new CancellationTokenSource(TimeSpan.FromSeconds(15));
+   try{
+    await pipe.ConnectAsync(timeout.Token);
+    using var writer=new StreamWriter(pipe,Encoding.UTF8,leaveOpen:true){AutoFlush=true};
+    using var reader=new StreamReader(pipe,Encoding.UTF8,leaveOpen:true);
+    await writer.WriteLineAsync(JsonSerializer.Serialize(c,Paths.Json).AsMemory(),timeout.Token);
+    var line=await reader.ReadLineAsync(timeout.Token);
+    if(line==null)throw new IOException("后台服务意外关闭连接，请重新安装服务后重试");
+    return JsonSerializer.Deserialize<Reply>(line,Paths.Json)??throw new IOException("后台服务返回了空响应");
+   }catch(OperationCanceledException){throw new TimeoutException("后台服务正在运行，但 15 秒内未响应。请点击一键安装后台服务进行修复，并关闭其他旧版窗口。");}
+   catch(UnauthorizedAccessException){throw new IOException("Windows 拒绝访问后台服务通信通道，请重新安装服务修复权限。");}
+  }finally{pipeGate.Release();}
  }
  async Task Refresh(){
-  if(refreshing)return;refreshing=true;
+  if(refreshing||installingService)return;refreshing=true;
   try{
    List<TunnelRow> list;
    string serviceStatus;
    try{var r=await Send(new("list"));if(!r.Ok)throw new Exception(r.Message);list=JsonSerializer.Deserialize<List<TunnelRow>>(r.Data!,Paths.Json)??new();serviceStatus="后台服务已连接";}
-   catch{list=cloud.Values.Select(t=>new TunnelRow{Id=t.Id,Name=t.Label,Type=t.Type,Node=t.Node,LocalAddress=t.LocalAddress,RemoteAddress=t.RemoteAddress,Description=t.Remark}).ToList();serviceStatus="后台服务未连接，安装服务后可启动隧道";}
+   catch(Exception serviceError){list=cloud.Values.Select(t=>new TunnelRow{Id=t.Id,Name=t.Label,Type=t.Type,Node=t.Node,LocalAddress=t.LocalAddress,RemoteAddress=t.RemoteAddress,Description=t.Remark}).ToList();serviceStatus=serviceError.Message;}
    var errors=new List<string>();
    if(session!=null){
     // Sequential polling bounds load; cumulative counters are sampled using server timestamps.
@@ -134,7 +151,20 @@ public partial class MainWindow:Window {
  async void Start_Click(object s,RoutedEventArgs e)=>await Safe(()=>Action("start"));
  async void Stop_Click(object s,RoutedEventArgs e)=>await Safe(()=>Action("stop"));
  async void Auto_Click(object s,RoutedEventArgs e)=>await Safe(()=>Action("auto",(!Selected().AutoStart).ToString().ToLowerInvariant()));
- void Install_Click(object s,RoutedEventArgs e)=>RunElevated("install-service.cmd");
+ async void Install_Click(object s,RoutedEventArgs e)=>await Safe(async()=>{
+  if(installingService)return;installingService=true;poller.Stop();
+  try{
+   var script=Path.Combine(AppContext.BaseDirectory,"install-service.ps1");
+   if(!File.Exists(script))throw new FileNotFoundException("安装脚本缺失，请完整解压新版程序",script);
+   Status.Text="正在安装并验证后台服务，请确认管理员授权…";
+   using var process=Process.Start(new ProcessStartInfo("powershell.exe",$"-NoProfile -ExecutionPolicy Bypass -File \"{script}\""){Verb="runas",UseShellExecute=true,WorkingDirectory=AppContext.BaseDirectory})??throw new Exception("无法启动服务安装程序");
+   await process.WaitForExitAsync();
+   if(process.ExitCode!=0){var log=Path.Combine(Paths.Root,"install-result.txt");throw new Exception("后台服务安装失败："+(File.Exists(log)?await File.ReadAllTextAsync(log):"未完成管理员授权，或安装进程异常退出"));}
+   var reply=await Send(new("list"));if(!reply.Ok)throw new Exception(reply.Message);
+   MessageBox.Show("后台服务已安装，连接验证通过。","洛链绽放");
+  }finally{installingService=false;poller.Start();}
+  if(session!=null)await Sync();else await Refresh();
+ });
  void Uninstall_Click(object s,RoutedEventArgs e)=>RunElevated("uninstall-service.cmd");
  void RunElevated(string script){
   var path=Path.Combine(AppContext.BaseDirectory,script);
