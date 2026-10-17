@@ -11,5 +11,5 @@ public static class Paths {
  public static string Frpc=>Path.Combine(Root,"frpc.exe");
  public static string ClientId=>Path.Combine(Root,"client-id.txt");
  public static void Ensure()=>Directory.CreateDirectory(Root);
- public static readonly JsonSerializerOptions Json=new(JsonSerializerDefaults.Web){WriteIndented=true};
+ public static readonly JsonSerializerOptions Json=new(JsonSerializerDefaults.Web){WriteIndented=false};
 }

@@ -6,7 +6,6 @@ using System.Diagnostics;
 using System.Text.Json;
 using System.Security.AccessControl;
 using System.Security.Principal;
-using System.IO.Pipes.AccessControl;
 
 Paths.Ensure();
 var builder=Host.CreateApplicationBuilder(args);
