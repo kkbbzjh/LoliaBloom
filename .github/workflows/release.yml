@@ -87,12 +87,12 @@ jobs:
             LoliaBloom-win-x64.zip
             LoliaBloom-screenshot.png
           if-no-files-found: error
-      - name: Publish v0.4.2
+      - name: Publish v0.4.3
         env:
           GH_TOKEN: ${{ github.token }}
         shell: pwsh
         run: |
-          gh release view v0.4.2 *> $null
-          if ($LASTEXITCODE -eq 0) { throw 'v0.4.2 already exists; refusing to replace it.' }
-          gh release create v0.4.2 LoliaBloom-win-x64.zip LoliaBloom-screenshot.png --target '${{ github.sha }}' --title '洛链绽放 · Lolia Bloom v0.4.2' --notes 'Adds documented cloud tunnel creation (TCP/UDP/HTTP/HTTPS), paginated tunnel sync, encrypted saved login with token refresh, automatic tunnel credential sync, and official traffic counters with estimated rates. Adds the official dashboard check-in request and optional hourly checks while the app runs. Live account authorization and check-in OAuth compatibility require account verification.'
+          gh release view v0.4.3 *> $null
+          if ($LASTEXITCODE -eq 0) { throw 'v0.4.3 already exists; refusing to replace it.' }
+          gh release create v0.4.3 LoliaBloom-win-x64.zip LoliaBloom-screenshot.png --target '${{ github.sha }}' --title '洛链绽放 · Lolia Bloom v0.4.3' --notes 'Includes the registered Lolia Bloom public OAuth client ID. Click Login to authorize in the official browser page; no manual Client ID entry is required. Retains cloud tunnel creation, traffic statistics and check-in requests. Check-in OAuth compatibility still requires account verification.'
           if ($LASTEXITCODE) { exit $LASTEXITCODE }

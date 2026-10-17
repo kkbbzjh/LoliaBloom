@@ -82,17 +82,12 @@ public partial class MainWindow:Window {
  async Task Safe(Func<Task> f){try{await f();}catch(Exception e){MessageBox.Show(e.Message,"洛链绽放",MessageBoxButton.OK,MessageBoxImage.Warning);}}
  async void Refresh_Click(object s,RoutedEventArgs e){nextUserCheck=DateTimeOffset.MinValue;await Safe(Refresh);}
  async void Login_Click(object s,RoutedEventArgs e)=>await Safe(Login);
+ // Public OAuth application identifier; not a client secret.
+ const string DefaultClientId="3k9iwlin05pwdv7g";
  string GetClientId(){
   var id=SessionStore.ClientId;
   if(string.IsNullOrWhiteSpace(id)&&File.Exists(Paths.ClientId))id=File.ReadAllText(Paths.ClientId).Trim();
-  var dialog=new Window{Title="洛链绽放 · OAuth 应用设置",Width=530,Height=300,Owner=this,WindowStartupLocation=WindowStartupLocation.CenterOwner,ResizeMode=ResizeMode.NoResize};
-  var box=new System.Windows.Controls.StackPanel{Margin=new Thickness(20)};
-  box.Children.Add(new System.Windows.Controls.TextBlock{Text="首次使用需注册洛链绽放自己的 OAuth Public 应用。回调地址填写 http://localhost:1145，随后在下方填入 Client ID。无需 Client Secret。",TextWrapping=TextWrapping.Wrap});
-  var input=new System.Windows.Controls.TextBox{Text=id,Margin=new Thickness(0,14,0,14)};box.Children.Add(input);
-  var link=new System.Windows.Controls.Button{Content="打开官方应用注册页",Margin=new Thickness(0,0,0,14)};link.Click+=(_,_)=>Process.Start(new ProcessStartInfo("https://dash.lolia.link/dash/oauth/apps/create"){UseShellExecute=true});box.Children.Add(link);
-  var ok=new System.Windows.Controls.Button{Content="保存并授权登录"};ok.Click+=(_,_)=>{if(!string.IsNullOrWhiteSpace(input.Text))dialog.DialogResult=true;};box.Children.Add(ok);dialog.Content=box;
-  if(dialog.ShowDialog()!=true)throw new OperationCanceledException("已取消登录");
-  SessionStore.ClientId=input.Text.Trim();return input.Text.Trim();
+  return string.IsNullOrWhiteSpace(id)?DefaultClientId:id;
  }
  async Task Login(){
   if(signingIn)return;signingIn=true;
