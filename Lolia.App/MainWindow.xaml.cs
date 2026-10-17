@@ -77,6 +77,13 @@ public partial class MainWindow:ChromeWindow {
    catch(Exception serviceError){list=cloud.Values.Select(t=>new TunnelRow{Id=t.Id,Name=t.Label,Type=t.Type,Node=t.Node,LocalAddress=t.LocalAddress,RemoteAddress=t.RemoteAddress,Description=t.Remark}).ToList();serviceStatus=serviceError.Message;}
    foreach(var t in list){if(cloudTotals.TryGetValue(t.Id,out var total)){t.TotalBytesIn=total.In;t.TotalBytesOut=total.Out;}}
    if(session!=null&&!cloudRefreshing&&DateTimeOffset.UtcNow>=nextCloudPoll)_=RefreshCloudData();
+   if(!installingService){
+    var ready=serviceStatus=="后台服务已连接";
+    if(ready&&list.Any(t=>t.Running&&string.IsNullOrWhiteSpace(t.MetricsSource)))ready=false;
+    ServiceGuide.Visibility=ready?Visibility.Collapsed:Visibility.Visible;
+    ServiceButton.Content=ready?"✓ 后台服务已就绪":"① 安装 / 修复后台服务";
+    if(!ready&&!GuideTitle.Text.StartsWith("安装未完成",StringComparison.Ordinal)){GuideTitle.Text="先完成这一步，才能启动隧道";GuideDescription.Text=serviceStatus+"。点击上方按钮安装或修复，并允许管理员授权。";}
+   }
    var selected=(TunnelGrid.SelectedItem as TunnelRow)?.Id;TunnelGrid.ItemsSource=list;TunnelGrid.SelectedItem=list.FirstOrDefault(t=>t.Id==selected);
    GlobalDownload.Text=list.Any(t=>t.DownloadBytesPerSecond!=null)?TunnelRow.Format(list.Sum(t=>t.DownloadBytesPerSecond??0),true):"—";
    GlobalUpload.Text=list.Any(t=>t.UploadBytesPerSecond!=null)?TunnelRow.Format(list.Sum(t=>t.UploadBytesPerSecond??0),true):"—";
@@ -96,7 +103,7 @@ public partial class MainWindow:ChromeWindow {
    var user=await api.User();CheckinStatus.Text=user.TryGetProperty("today_checked",out var status)&&status.GetBoolean()?"今日已签到，明天也要记得来。":"今日还未签到，去官网领取流量。";
   }catch(Exception e){CheckinStatus.Text="平台状态："+e.Message;}finally{cloudRefreshing=false;}
  }
- async Task Safe(Func<Task> f){try{await f();}catch(Exception e){MessageBox.Show(e.Message,"洛链绽放",MessageBoxButton.OK,MessageBoxImage.Warning);}}
+ async Task Safe(Func<Task> f){try{await f();}catch(Exception e){Status.Text=e.Message;if(ServiceState()!="running"||e.Message.Contains("后台服务",StringComparison.Ordinal)){ServiceGuide.Visibility=Visibility.Visible;GuideTitle.Text="安装未完成，请点上方按钮安装或修复";GuideDescription.Text=e.Message;}}}
  async void Refresh_Click(object s,RoutedEventArgs e){nextCloudPoll=DateTimeOffset.MinValue;await Safe(Refresh);}
  async void Login_Click(object s,RoutedEventArgs e)=>await Safe(Login);
  // Public OAuth application identifier; not a client secret.
@@ -142,7 +149,7 @@ public partial class MainWindow:ChromeWindow {
   foreach(var t in remote){string? token=null;try{token=await api.TunnelToken(t.CloudName);}catch(Exception e){failures.Add(t.Label+"："+e.Message);}list.Add(new(t.Id,t.Label,false,t.Type,t.Node,t.LocalAddress,t.RemoteAddress,t.Remark,token));}
   try{var r=await Send(new("sync",Value:JsonSerializer.Serialize(list,Paths.Json)));if(!r.Ok)throw new Exception(r.Message);}catch(Exception e){failures.Add("云端同步成功，后台服务同步失败："+e.Message);}
   await Refresh();
-  if(failures.Count>0)MessageBox.Show(string.Join("\n",failures),"同步结果");
+  if(failures.Count>0){Status.Text=string.Join("；",failures);if(failures.Any(f=>f.Contains("后台服务",StringComparison.Ordinal))){ServiceGuide.Visibility=Visibility.Visible;GuideTitle.Text="安装未完成，请先安装或修复后台服务";GuideDescription.Text=failures.Last();}}
  }
  TunnelRow Selected()=>TunnelGrid.SelectedItem as TunnelRow??throw new Exception("请先选中一条隧道");
  async Task Action(string action,string? value=null){var t=Selected();var r=await Send(new(action,t.Id,value));if(!r.Ok)throw new Exception(r.Message);await Refresh();}
@@ -161,20 +168,22 @@ public partial class MainWindow:ChromeWindow {
    var reply=await Send(new("engine-update"));if(!reply.Ok)throw new Exception(reply.Message);MessageBox.Show(reply.Message,"洛链绽放");
   }finally{installingService=false;poller.Start();await Refresh();}
  });
- async void Install_Click(object s,RoutedEventArgs e)=>await Safe(async()=>{
+ async void Install_Click(object s,RoutedEventArgs e){
   if(installingService)return;installingService=true;poller.Stop();
   try{
    var script=Path.Combine(AppContext.BaseDirectory,"install-service.ps1");
    if(!File.Exists(script))throw new FileNotFoundException("安装脚本缺失，请完整解压新版程序",script);
+   ServiceGuide.Visibility=Visibility.Visible;GuideTitle.Text="正在安装并验证后台服务…";GuideDescription.Text="请允许 Windows 管理员授权。完成后会自动连接并同步隧道。";ServiceButton.Content="正在安装…";ServiceButton.IsEnabled=false;
    Status.Text="正在安装并验证后台服务，请确认管理员授权…";
    using var process=Process.Start(new ProcessStartInfo("powershell.exe",$"-NoProfile -ExecutionPolicy Bypass -File \"{script}\""){Verb="runas",UseShellExecute=true,WorkingDirectory=AppContext.BaseDirectory})??throw new Exception("无法启动服务安装程序");
    await process.WaitForExitAsync();
    if(process.ExitCode!=0){var log=Path.Combine(Paths.Root,"install-result.txt");throw new Exception("后台服务安装失败："+(File.Exists(log)?await File.ReadAllTextAsync(log):"未完成管理员授权，或安装进程异常退出"));}
    var reply=await Send(new("list"));if(!reply.Ok)throw new Exception(reply.Message);
-   MessageBox.Show("后台服务已安装，连接验证通过。","洛链绽放");
-  }finally{installingService=false;poller.Start();}
-  if(session!=null)await Sync();else await Refresh();
- });
+   ServiceGuide.Visibility=Visibility.Collapsed;ServiceButton.Content="✓ 后台服务已就绪";Status.Text="后台服务安装成功，正在同步隧道…";
+   if(session!=null)await Sync();
+  }catch(Exception ex){ServiceGuide.Visibility=Visibility.Visible;GuideTitle.Text="安装未完成，请点击上方按钮重试";GuideDescription.Text=ex is System.ComponentModel.Win32Exception w&&w.NativeErrorCode==1223?"你取消了 Windows 管理员授权。重新点击按钮并选择允许，才能安装后台服务。":ex.Message;Status.Text=GuideDescription.Text;}
+  finally{installingService=false;ServiceButton.IsEnabled=true;ServiceButton.Content=ServiceState()=="running"?"✓ 后台服务已就绪":"① 安装 / 修复后台服务";poller.Start();}
+ }
  void Uninstall_Click(object s,RoutedEventArgs e)=>RunElevated("uninstall-service.cmd");
  void RunElevated(string script){
   var path=Path.Combine(AppContext.BaseDirectory,script);
