@@ -67,7 +67,7 @@ public partial class MainWindow:Window {
     // Sequential polling bounds load; cumulative counters are sampled using server timestamps.
     foreach(var t in list){
      if(!cloud.TryGetValue(t.Id,out var c))continue;
-     try{var sample=await api.Traffic(c.CloudName);var rate=sampler.Update(c.CloudName,sample);t.TotalBytesIn=sample.In;t.TotalBytesOut=sample.Out;t.UploadBytesPerSecond=rate.In;t.DownloadBytesPerSecond=rate.Out;t.MetricsSource="官方累计流量；速度按服务端更新时间差分估算";}
+     try{var sample=await api.Traffic(c.CloudName);var rate=sampler.Update(c.CloudName,sample);t.TotalBytesIn=sample.In;t.TotalBytesOut=sample.Out;t.DownloadBytesPerSecond=rate.In;t.UploadBytesPerSecond=rate.Out;t.MetricsSource="官方累计流量；速度按服务端更新时间差分估算";}
      catch(Exception e){t.MetricsSource=e.Message;errors.Add("流量："+e.Message);break;}
     }
     if(DateTimeOffset.UtcNow>=nextUserCheck){
