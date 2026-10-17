@@ -1,0 +1,79 @@
+using Lolia.Shared;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using System.IO.Pipes;
+using System.Diagnostics;
+using System.Text.Json;
+using System.Security.AccessControl;
+using System.Security.Principal;
+using System.IO.Pipes.AccessControl;
+
+Paths.Ensure();
+var builder=Host.CreateApplicationBuilder(args);
+builder.Services.AddWindowsService(o=>o.ServiceName="LoliaBloomService");
+builder.Services.AddHostedService<Manager>();
+await builder.Build().RunAsync();
+
+sealed class Manager:BackgroundService {
+ readonly Dictionary<string,Process> running=new();
+ readonly object gate=new();
+ List<Tunnel> tunnels=new();
+ protected override async Task ExecuteAsync(CancellationToken ct) {
+  try { if(File.Exists(Paths.Tunnels)) tunnels=JsonSerializer.Deserialize<List<Tunnel>>(await File.ReadAllTextAsync(Paths.Tunnels,ct),Paths.Json)??new(); }catch{}
+  foreach(var t in tunnels.Where(t=>t.AutoStart)) Start(t.Id);
+  while(!ct.IsCancellationRequested){
+   try{
+    var security=new PipeSecurity();
+    security.AddAccessRule(new PipeAccessRule(new SecurityIdentifier(WellKnownSidType.BuiltinUsersSid,null),PipeAccessRights.ReadWrite,AccessControlType.Allow));
+    security.AddAccessRule(new PipeAccessRule(new SecurityIdentifier(WellKnownSidType.LocalSystemSid,null),PipeAccessRights.FullControl,AccessControlType.Allow));
+    using var pipe=NamedPipeServerStreamAcl.Create("LoliaBloomPipe",PipeDirection.InOut,1,PipeTransmissionMode.Byte,PipeOptions.Asynchronous,4096,4096,security);
+    await pipe.WaitForConnectionAsync(ct);
+    using var reader=new StreamReader(pipe,System.Text.Encoding.UTF8,leaveOpen:true);
+    using var writer=new StreamWriter(pipe,System.Text.Encoding.UTF8,leaveOpen:true){AutoFlush=true};
+    var line=await reader.ReadLineAsync(ct);
+    if(line==null)continue;
+    var cmd=JsonSerializer.Deserialize<Command>(line,Paths.Json)!;
+    Reply reply;
+    try { reply=await Handle(cmd,ct); }catch(Exception ex){reply=new(false,ex.Message);}
+    await writer.WriteLineAsync(JsonSerializer.Serialize(reply,Paths.Json));
+   }catch(OperationCanceledException){break;}catch(Exception ex){Console.Error.WriteLine(ex);await Task.Delay(1000,ct);}
+  }
+ }
+ async Task<Reply> Handle(Command c,CancellationToken ct){
+  switch(c.Action){
+   case "list": return new(true,"OK",JsonSerializer.Serialize(tunnels.Select(t=>new TunnelView(t.Id,t.Name,t.AutoStart,IsRunning(t.Id),t.Type,t.Node,t.LocalAddress,t.RemoteAddress,t.Description)),Paths.Json));
+   case "sync": {
+    var incoming=JsonSerializer.Deserialize<List<Tunnel>>(c.Value??"[]",Paths.Json)??new();
+    if(incoming.Count>500||incoming.Any(t=>!System.Text.RegularExpressions.Regex.IsMatch(t.Id,@"^[0-9A-Za-z_-]{1,100}$")))return new(false,"Invalid tunnel IDs");
+    var old=tunnels.ToDictionary(x=>x.Id);
+    tunnels=incoming.Select(t=>t with{AutoStart=old.TryGetValue(t.Id,out var v)&&v.AutoStart}).ToList();
+    await Save(ct);return new(true,$"Synced {tunnels.Count} tunnels");
+   }
+   case "auto":{
+    var t=tunnels.FirstOrDefault(t=>t.Id==c.Id);if(t==null)return new(false,"Unknown tunnel");
+    tunnels[tunnels.IndexOf(t)]=t with{AutoStart=c.Value=="true"};await Save(ct);return new(true,"Saved");
+   }
+   case "start":return new(Start(c.Id??""),"启动请求已处理；如失败请检查 frpc.exe 和隧道凭据是否已配置");
+   case "stop":return new(Stop(c.Id??""),"Stop requested");
+   default:return new(false,"Unknown command");
+  }
+ }
+ async Task Save(CancellationToken ct){Paths.Ensure();await File.WriteAllTextAsync(Paths.Tunnels,JsonSerializer.Serialize(tunnels,Paths.Json),ct);}
+ bool IsRunning(string id){lock(gate)return running.TryGetValue(id,out var p)&&!p.HasExited;}
+ bool Start(string id){
+  if(!tunnels.Any(t=>t.Id==id)||!File.Exists(Paths.Frpc))return false;
+  lock(gate){
+   if(IsRunning(id))return true;
+   var psi=new ProcessStartInfo(Paths.Frpc){UseShellExecute=false,CreateNoWindow=true,WorkingDirectory=Paths.Root};
+   // Lolia requires an authorized per-tunnel credential. Never launch with a bare ID.
+   var keyPath=Path.Combine(Paths.Root,"keys",id+".txt");
+   if(!File.Exists(keyPath))return false;
+   var key=File.ReadAllText(keyPath).Trim();
+   if(string.IsNullOrWhiteSpace(key))return false;
+   psi.ArgumentList.Add("-t");psi.ArgumentList.Add(id+":"+key);
+   var p=Process.Start(psi);if(p==null)return false;running[id]=p;return true;
+  }
+ }
+ bool Stop(string id){lock(gate){if(!running.Remove(id,out var p))return false;try{if(!p.HasExited)p.Kill(entireProcessTree:true);}catch{}p.Dispose();return true;}}
+ public override async Task StopAsync(CancellationToken ct){foreach(var id in running.Keys.ToArray())Stop(id);await base.StopAsync(ct);}
+}

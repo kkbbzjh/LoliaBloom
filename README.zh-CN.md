@@ -23,7 +23,7 @@ Lolia Bloom 计划提供清爽的粉色管理界面，并通过独立 Windows �
 
 项目规划采用 **绿色版 + 一键注册服务**，不要求用户手动输入服务安装命令。
 
-目前仓库中的 GitHub Actions 工作流可尝试构建 Windows x64，但应用源码尚需上传和验证，暂时不能保证产出可运行版本。
+V0.4 源码已包含在仓库中。GitHub Actions 构建 Windows x64 自包含绿色版，并验证服务安装与进程间通信。
 
 未来可从 [Releases 下载页面](https://github.com/kkbbzjh/LoliaBloom/releases) 获取 ZIP。安装 Windows 服务需要确认管理员权限。
 
@@ -34,3 +34,9 @@ Lolia Bloom 计划提供清爽的粉色管理界面，并通过独立 Windows �
 ## 声明
 
 本项目为非官方社区客户端，未获得 Lolia FRP 官方背书。相关品牌和商标归原权利人所有。目前尚未选定开源许可证，代码复用及分发请以仓库后续许可证为准。
+
+## 绿色版使用
+
+完整解压 ZIP，运行 `Lolia.App.exe`，点击安装服务按钮并确认 UAC。`Service` 文件夹必须保留在程序旁边。服务安装到 Program Files，数据保留在 `%ProgramData%\LoliaBloom`。
+
+请另行下载官方 `frpc.exe` 放在安装脚本旁。OAuth 需要注册回调 `http://localhost:1145`，将 Client ID 写入数据目录下的 `client-id.txt`；隧道凭据写入 `keys/<id>.txt`。签到、每日自动签到、云端创建和流量统计在此原型中尚未接通，不能视为已实现功能。

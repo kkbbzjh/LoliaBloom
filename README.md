@@ -20,9 +20,9 @@ Lolia Bloom aims to make tunnel management simpler on Windows, with a pink-theme
 
 ## Installation and builds
 
-This repository currently contains a GitHub Actions workflow for Windows x64. The application source code still needs to be uploaded and validated before it can produce a usable build.
+The V0.4 source is included. GitHub Actions builds self-contained Windows x64 binaries and verifies Windows Service installation and named-pipe communication.
 
-Once source and builds are available, check [Releases](https://github.com/kkbbzjh/LoliaBloom/releases) for portable ZIP packages. Service installation will require Windows administrator approval.
+Check [Releases](https://github.com/kkbbzjh/LoliaBloom/releases) for portable ZIP packages. Service installation will require Windows administrator approval.
 
 ## Contributing
 
@@ -31,3 +31,9 @@ Issues, feedback and pull requests are welcome. Please avoid including access to
 ## Disclaimer
 
 Unofficial community project; not affiliated with or endorsed by Lolia FRP. Lolia names and trademarks belong to their respective owners. No open-source license has been selected yet; check repository licensing before reuse or redistribution.
+
+## Portable setup
+
+Extract the entire ZIP to a folder and run `Lolia.App.exe`. Click the service installation button and approve Windows UAC. Keep the `Service` folder beside the app. Service files are copied to Program Files; data is stored under `%ProgramData%\LoliaBloom`.
+
+Download the official `frpc.exe` separately and place it beside `install-service.cmd` before installation. Register an OAuth public client with redirect URI `http://localhost:1145` and write its client ID to `%ProgramData%\LoliaBloom\client-id.txt`. Per-tunnel credentials are read from `keys/<id>.txt` under that data directory. Check-in, automatic check-in, cloud creation and traffic metrics are not implemented integrations in this prototype.
