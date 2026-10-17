@@ -11,15 +11,42 @@ using System.Text;
 using System.Diagnostics;
 namespace Lolia.App;
 public partial class MainWindow:Window {
- string? accessToken; string? refreshToken;
+ SavedSession? session=SessionStore.Load();
  const string Authorize="https://dash.lolia.link/oauth/authorize";
  const string TokenUrl="https://api.lolia.link/api/v1/oauth2/token";
- const string BaseUrl="https://api.lolia.link/api/v1";
- const string Redirect="http://localhost:1145/";
+ const string Redirect="http://localhost:1145";
  readonly HttpClient http=new(){Timeout=TimeSpan.FromSeconds(20)};
- readonly System.Windows.Threading.DispatcherTimer poller=new(){Interval=TimeSpan.FromSeconds(3)};
- bool refreshing;
- public MainWindow(){InitializeComponent();Loaded+=async (_,_)=>{await Refresh();poller.Tick+=async (_,_)=>await Refresh();poller.Start();};Closed+=(_,_)=>poller.Stop();}
+ readonly SemaphoreSlim authGate=new(1,1);
+ readonly System.Windows.Threading.DispatcherTimer poller=new(){Interval=TimeSpan.FromSeconds(5)};
+ readonly TrafficSampler sampler=new();
+ readonly Dictionary<string,CloudTunnel> cloud=new();
+ LoliaApi api=null!;
+ bool refreshing,signingIn,autoCheckin,checkingIn;
+ DateTimeOffset nextUserCheck=DateTimeOffset.MinValue,lastAutoAttempt=DateTimeOffset.MinValue;
+ readonly string settingsPath=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"LoliaBloom","auto-checkin.txt");
+ public MainWindow(){
+  InitializeComponent();api=new LoliaApi(http,GetAccessToken);
+  autoCheckin=File.Exists(settingsPath)&&File.ReadAllText(settingsPath)=="true";
+  AutoCheckin.IsChecked=autoCheckin;
+  AutoCheckin.Checked+=(_,_)=>SaveAuto(true);AutoCheckin.Unchecked+=(_,_)=>SaveAuto(false);
+  Loaded+=async(_,_)=>{if(session!=null)await Safe(Sync);else await Refresh();poller.Tick+=async(_,_)=>await Refresh();poller.Start();};Closed+=(_,_)=>poller.Stop();
+ }
+ void SaveAuto(bool enabled){autoCheckin=enabled;Directory.CreateDirectory(Path.GetDirectoryName(settingsPath)!);File.WriteAllText(settingsPath,enabled?"true":"false");nextUserCheck=DateTimeOffset.MinValue;}
+ async Task<string> GetAccessToken(){
+  await authGate.WaitAsync();
+  try{
+   if(session==null)throw new Exception("请先登录账号");
+   if(session.ExpiresAt>DateTimeOffset.UtcNow.AddMinutes(1))return session.AccessToken;
+   if(string.IsNullOrEmpty(session.RefreshToken))throw new Exception("登录已过期，请重新登录");
+   session=await Exchange(new(){{"grant_type","refresh_token"},{"refresh_token",session.RefreshToken},{"client_id",session.ClientId}},session.ClientId,session.RefreshToken);SessionStore.Save(session);return session.AccessToken;
+  }finally{authGate.Release();}
+ }
+ async Task<SavedSession> Exchange(Dictionary<string,string> values,string id,string? oldRefresh=null){
+  using var resp=await http.PostAsync(TokenUrl,new FormUrlEncodedContent(values));
+  using var doc=JsonDocument.Parse(await resp.Content.ReadAsStringAsync());var x=doc.RootElement;
+  if(!resp.IsSuccessStatusCode)throw new Exception(LoliaApi.Str(x,"error_description")??"授权失败，请重新登录");
+  return new(id,x.GetProperty("access_token").GetString()!,LoliaApi.Str(x,"refresh_token")??oldRefresh,DateTimeOffset.UtcNow.AddSeconds(x.GetProperty("expires_in").GetInt32()));
+ }
  async Task<Reply> Send(Command c){
   using var pipe=new NamedPipeClientStream(".","LoliaBloomPipe",PipeDirection.InOut,PipeOptions.Asynchronous);
   using var timeout=new CancellationTokenSource(TimeSpan.FromSeconds(6));await pipe.ConnectAsync(timeout.Token);
@@ -28,29 +55,63 @@ public partial class MainWindow:Window {
   await writer.WriteLineAsync(JsonSerializer.Serialize(c,Paths.Json));
   return JsonSerializer.Deserialize<Reply>((await reader.ReadLineAsync(timeout.Token))!,Paths.Json)!;
  }
- async Task Refresh(){if(refreshing)return;refreshing=true;try{var r=await Send(new("list"));if(!r.Ok)throw new Exception(r.Message);var list=JsonSerializer.Deserialize<List<TunnelRow>>(r.Data!,Paths.Json);TunnelGrid.ItemsSource=list;Status.Text=$"服务已连接 · {list?.Count??0} 条隧道 · {DateTime.Now:HH:mm:ss} 刷新（流量接口未配置时显示 —）";}catch(Exception e){Status.Text="服务不可用："+e.Message;}finally{refreshing=false;}}
- async Task Safe(Func<Task> f){try{await f();}catch(Exception e){MessageBox.Show(e.Message,"Lolia Bloom",MessageBoxButton.OK,MessageBoxImage.Warning);}}
- async void Refresh_Click(object s,RoutedEventArgs e)=>await Safe(Refresh);
+ async Task Refresh(){
+  if(refreshing)return;refreshing=true;
+  try{
+   List<TunnelRow> list;
+   string serviceStatus;
+   try{var r=await Send(new("list"));if(!r.Ok)throw new Exception(r.Message);list=JsonSerializer.Deserialize<List<TunnelRow>>(r.Data!,Paths.Json)??new();serviceStatus="后台服务已连接";}
+   catch{list=cloud.Values.Select(t=>new TunnelRow{Id=t.Id,Name=t.Label,Type=t.Type,Node=t.Node,LocalAddress=t.LocalAddress,RemoteAddress=t.RemoteAddress,Description=t.Remark}).ToList();serviceStatus="后台服务未连接，安装服务后可启动隧道";}
+   var errors=new List<string>();
+   if(session!=null){
+    // Sequential polling bounds load; cumulative counters are sampled using server timestamps.
+    foreach(var t in list){
+     if(!cloud.TryGetValue(t.Id,out var c))continue;
+     try{var sample=await api.Traffic(c.CloudName);var rate=sampler.Update(c.CloudName,sample);t.TotalBytesIn=sample.In;t.TotalBytesOut=sample.Out;t.UploadBytesPerSecond=rate.In;t.DownloadBytesPerSecond=rate.Out;t.MetricsSource="官方累计流量；速度按服务端更新时间差分估算";}
+     catch(Exception e){t.MetricsSource=e.Message;errors.Add("流量："+e.Message);break;}
+    }
+    if(DateTimeOffset.UtcNow>=nextUserCheck){
+     nextUserCheck=DateTimeOffset.UtcNow.AddMinutes(1);
+     try{await UpdateCheckin();}catch(Exception e){CheckinStatus.Text="签到状态查询失败："+e.Message;}
+    }
+   }
+   var selected=(TunnelGrid.SelectedItem as TunnelRow)?.Id;TunnelGrid.ItemsSource=list;TunnelGrid.SelectedItem=list.FirstOrDefault(t=>t.Id==selected);
+   Status.Text=serviceStatus+$" · {list.Count} 条隧道 · {DateTime.Now:HH:mm:ss}"+(errors.Count>0?" · "+errors[0]:"");
+  }catch(Exception e){Status.Text=e.Message;}finally{refreshing=false;}
+ }
+ async Task Safe(Func<Task> f){try{await f();}catch(Exception e){MessageBox.Show(e.Message,"洛链绽放",MessageBoxButton.OK,MessageBoxImage.Warning);}}
+ async void Refresh_Click(object s,RoutedEventArgs e){nextUserCheck=DateTimeOffset.MinValue;await Safe(Refresh);}
  async void Login_Click(object s,RoutedEventArgs e)=>await Safe(Login);
+ string GetClientId(){
+  var id=SessionStore.ClientId;
+  if(string.IsNullOrWhiteSpace(id)&&File.Exists(Paths.ClientId))id=File.ReadAllText(Paths.ClientId).Trim();
+  var dialog=new Window{Title="洛链绽放 · OAuth 应用设置",Width=530,Height=300,Owner=this,WindowStartupLocation=WindowStartupLocation.CenterOwner,ResizeMode=ResizeMode.NoResize};
+  var box=new System.Windows.Controls.StackPanel{Margin=new Thickness(20)};
+  box.Children.Add(new System.Windows.Controls.TextBlock{Text="首次使用需注册洛链绽放自己的 OAuth Public 应用。回调地址填写 http://localhost:1145，随后在下方填入 Client ID。无需 Client Secret。",TextWrapping=TextWrapping.Wrap});
+  var input=new System.Windows.Controls.TextBox{Text=id,Margin=new Thickness(0,14,0,14)};box.Children.Add(input);
+  var link=new System.Windows.Controls.Button{Content="打开官方应用注册页",Margin=new Thickness(0,0,0,14)};link.Click+=(_,_)=>Process.Start(new ProcessStartInfo("https://dash.lolia.link/dash/oauth/apps/create"){UseShellExecute=true});box.Children.Add(link);
+  var ok=new System.Windows.Controls.Button{Content="保存并授权登录"};ok.Click+=(_,_)=>{if(!string.IsNullOrWhiteSpace(input.Text))dialog.DialogResult=true;};box.Children.Add(ok);dialog.Content=box;
+  if(dialog.ShowDialog()!=true)throw new OperationCanceledException("已取消登录");
+  SessionStore.ClientId=input.Text.Trim();return input.Text.Trim();
+ }
  async Task Login(){
-  Paths.Ensure();if(!File.Exists(Paths.ClientId))throw new Exception("请先在 ProgramData\\LoliaBloom\\client-id.txt 写入已注册的 OAuth Client ID");
-  var clientId=(await File.ReadAllTextAsync(Paths.ClientId)).Trim();if(string.IsNullOrWhiteSpace(clientId))throw new Exception("OAuth Client ID 为空");
-  var verifier=Base64(RandomNumberGenerator.GetBytes(32));var challenge=Base64(SHA256.HashData(Encoding.ASCII.GetBytes(verifier)));var state=Base64(RandomNumberGenerator.GetBytes(24));
-  using var listener=new HttpListener();listener.Prefixes.Add(Redirect);listener.Start();
-  var url=Authorize+"?response_type=code&client_id="+Uri.EscapeDataString(clientId)+"&redirect_uri="+Uri.EscapeDataString(Redirect.TrimEnd('/'))+"&code_challenge_method=S256&code_challenge="+challenge+"&state="+state;
-  Process.Start(new ProcessStartInfo(url){UseShellExecute=true});
-  using var timeout=new CancellationTokenSource(TimeSpan.FromMinutes(3));
-  var ctx=await listener.GetContextAsync().WaitAsync(timeout.Token);
-  var code=ctx.Request.QueryString["code"];
-  var returnedState=ctx.Request.QueryString["state"];
-  var message=Encoding.UTF8.GetBytes("<html><meta charset='utf-8'><body>授权已接收，可以返回 Lolia Bloom。</body></html>");
-  ctx.Response.ContentType="text/html; charset=utf-8";await ctx.Response.OutputStream.WriteAsync(message);ctx.Response.Close();
-  if(returnedState!=state||string.IsNullOrEmpty(code))throw new Exception("OAuth state 校验失败或未返回授权码");
-  using var resp=await http.PostAsync(TokenUrl,new FormUrlEncodedContent(new Dictionary<string,string>{{"grant_type","authorization_code"},{"code",code},{"client_id",clientId},{"redirect_uri",Redirect.TrimEnd('/')},{"code_verifier",verifier}}));
-  var body=await resp.Content.ReadAsStringAsync();if(!resp.IsSuccessStatusCode)throw new Exception("Token 请求失败: HTTP "+(int)resp.StatusCode);
-  using var json=JsonDocument.Parse(body);accessToken=json.RootElement.GetProperty("access_token").GetString();
-  if(json.RootElement.TryGetProperty("refresh_token",out var rt))refreshToken=rt.GetString();
-  Status.Text="授权成功（仅保存在 GUI 进程内）；请点击同步隧道";
+  if(signingIn)return;signingIn=true;
+  try{
+   var clientId=GetClientId();
+   var verifier=Base64(RandomNumberGenerator.GetBytes(32));var challenge=Base64(SHA256.HashData(Encoding.ASCII.GetBytes(verifier)));var state=Base64(RandomNumberGenerator.GetBytes(24));
+   using var listener=new HttpListener();listener.Prefixes.Add(Redirect+"/");listener.Start();
+   var url=Authorize+"?response_type=code&client_id="+Uri.EscapeDataString(clientId)+"&redirect_uri="+Uri.EscapeDataString(Redirect)+"&scope="+Uri.EscapeDataString("user:read tunnel:read tunnel:write traffic:read node:read")+"&code_challenge_method=S256&code_challenge="+challenge+"&state="+state;
+   Process.Start(new ProcessStartInfo(url){UseShellExecute=true});
+   using var timeout=new CancellationTokenSource(TimeSpan.FromMinutes(3));
+   HttpListenerContext ctx;
+   while(true){ctx=await listener.GetContextAsync().WaitAsync(timeout.Token);if(ctx.Request.QueryString["state"]==state)break;ctx.Response.StatusCode=400;ctx.Response.Close();}
+   var code=ctx.Request.QueryString["code"];var error=ctx.Request.QueryString["error"];
+   var message=Encoding.UTF8.GetBytes("<html><meta charset='utf-8'><body>请返回洛链绽放查看授权结果。</body></html>");ctx.Response.ContentType="text/html; charset=utf-8";await ctx.Response.OutputStream.WriteAsync(message);ctx.Response.Close();
+   if(!string.IsNullOrEmpty(error)||string.IsNullOrEmpty(code))throw new Exception("官方授权未完成："+error);
+   await authGate.WaitAsync();
+   try{session=await Exchange(new(){{"grant_type","authorization_code"},{"code",code},{"client_id",clientId},{"redirect_uri",Redirect},{"code_verifier",verifier}},clientId);SessionStore.Save(session);}finally{authGate.Release();}
+   cloud.Clear();sampler.Clear();nextUserCheck=DateTimeOffset.MinValue;await Sync();
+  }finally{signingIn=false;}
  }
  protected override void OnContentRendered(EventArgs e) {
   base.OnContentRendered(e);
@@ -70,27 +131,13 @@ public partial class MainWindow:Window {
  static string Base64(byte[] bytes)=>Convert.ToBase64String(bytes).TrimEnd('=').Replace('+','-').Replace('/','_');
  async void Sync_Click(object s,RoutedEventArgs e)=>await Safe(Sync);
  async Task Sync(){
-  if(string.IsNullOrEmpty(accessToken))throw new Exception("请先登录");
-  // API endpoint and JSON shape MUST be confirmed against live official API documentation.
-  using var request=new HttpRequestMessage(HttpMethod.Get,BaseUrl+"/tunnels");
-  request.Headers.Authorization=new AuthenticationHeaderValue("Bearer",accessToken);
-  using var response=await http.SendAsync(request);
-  if(!response.IsSuccessStatusCode)throw new Exception($"隧道 API HTTP {(int)response.StatusCode}。请核实 API 路径及授权 scope。");
-  using var json=JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-  var root=json.RootElement;
-  if(root.ValueKind==JsonValueKind.Object&&root.TryGetProperty("data",out var data))root=data;
-  if(root.ValueKind!=JsonValueKind.Array)throw new Exception("隧道 API 响应不是数组，请适配实际返回结构");
-  var list=new List<Tunnel>();
-  foreach(var x in root.EnumerateArray()){
-   var id=x.GetProperty("id").ToString();
-   var name=x.TryGetProperty("name",out var n)?n.GetString()??id:id;
-   list.Add(new Tunnel(id,name,false,
-    GetString(x,"type"),GetString(x,"node"),GetString(x,"local_address"),GetString(x,"remote_address"),GetString(x,"description")));
-  }
-  var result=await Send(new("sync",Value:JsonSerializer.Serialize(list,Paths.Json)));
-  if(!result.Ok)throw new Exception(result.Message);await Refresh();
+  var remote=await api.Tunnels();cloud.Clear();sampler.Clear();foreach(var t in remote)cloud[t.Id]=t;
+  var list=new List<Tunnel>();var failures=new List<string>();
+  foreach(var t in remote){string? token=null;try{token=await api.TunnelToken(t.CloudName);}catch(Exception e){failures.Add(t.Label+"："+e.Message);}list.Add(new(t.Id,t.Label,false,t.Type,t.Node,t.LocalAddress,t.RemoteAddress,t.Remark,token));}
+  try{var r=await Send(new("sync",Value:JsonSerializer.Serialize(list,Paths.Json)));if(!r.Ok)throw new Exception(r.Message);}catch(Exception e){failures.Add("云端同步成功，后台服务同步失败："+e.Message);}
+  await Refresh();
+  if(failures.Count>0)MessageBox.Show(string.Join("\n",failures),"同步结果");
  }
- static string? GetString(JsonElement x,string key)=>x.TryGetProperty(key,out var v)&&v.ValueKind!=JsonValueKind.Null?v.ToString():null;
  TunnelRow Selected()=>TunnelGrid.SelectedItem as TunnelRow??throw new Exception("请先选中一条隧道");
  async Task Action(string action,string? value=null){var t=Selected();var r=await Send(new(action,t.Id,value));if(!r.Ok)throw new Exception(r.Message);await Refresh();}
  async void Start_Click(object s,RoutedEventArgs e)=>await Safe(()=>Action("start"));
@@ -114,11 +161,24 @@ public partial class MainWindow:Window {
  void Details_Click(object s,RoutedEventArgs e){
   try{var t=Selected();MessageBox.Show($"名称：{t.Name}\nID：{t.Id}\n协议：{t.Type??"—"}\n节点：{t.Node??"—"}\n本地：{t.LocalAddress??"—"}\n远端：{t.RemoteAddress??"—"}\n状态：{t.StateText}\n开机连接：{(t.AutoStart?"是":"否")}\n下载速度：{t.DownloadText}\n上传速度：{t.UploadText}\n累计下载：{t.TotalInText}\n累计上传：{t.TotalOutText}\n说明：{t.Description??"—"}\n\n流量来源：{t.MetricsSource??"未接入官方流量 API"}","隧道详情",MessageBoxButton.OK,MessageBoxImage.Information);}catch(Exception ex){MessageBox.Show(ex.Message);}
  }
- void Checkin_Click(object s,RoutedEventArgs e){
-  CheckinStatus.Text="签到状态：尚未执行（接口未验证）";
-  MessageBox.Show("官方客户端支持手动签到，但目前尚未核实公开 API 的签到端点、授权权限和自动签到规则。为保护账号，不会猜测接口或发送签到请求。", "Lolia Bloom · 签到",MessageBoxButton.OK,MessageBoxImage.Information);
+ async Task UpdateCheckin(){
+  var u=await api.User();var checkedIn=u.TryGetProperty("today_checked",out var v)&&v.GetBoolean();
+  CheckinStatus.Text=checkedIn?"今日已签到":"今日未签到";
+  if(autoCheckin&&!checkedIn&&DateTimeOffset.UtcNow-lastAutoAttempt>TimeSpan.FromHours(1)){
+   lastAutoAttempt=DateTimeOffset.UtcNow;
+   try{await Checkin();}catch(Exception e){CheckinStatus.Text="自动签到失败："+e.Message;}
+  }
  }
- void Create_Click(object s,RoutedEventArgs e)=>MessageBox.Show("创建隧道需要确认官方 API 的创建端点、OAuth scope 与必填字段。当前版本不发送未经验证的写入请求，请先在 Lolia 控制台创建并同步。","创建隧道（待 API 验证）");
+ async Task Checkin(){
+  if(checkingIn)return;checkingIn=true;
+  try{var data=await api.Request(HttpMethod.Post,"/user/checkin");
+  CheckinStatus.Text="签到成功"+(LoliaApi.Str(data,"traffic_gb") is { } gb?$" · 获得 {gb} GB 流量":"");nextUserCheck=DateTimeOffset.UtcNow.AddMinutes(1);
+  }finally{checkingIn=false;}
+ }
+ async void Checkin_Click(object s,RoutedEventArgs e)=>await Safe(Checkin);
+ async void Create_Click(object s,RoutedEventArgs e)=>await Safe(async()=>{
+  var options=await api.Nodes();var dialog=new CreateTunnelWindow(api,options){Owner=this};if(dialog.ShowDialog()==true&&dialog.Created)await Sync();
+ });
  public sealed class TunnelRow{
  public string Id{get;set;}="";public string Name{get;set;}="";public bool AutoStart{get;set;}public bool Running{get;set;}
  public string? Type{get;set;}public string? Node{get;set;}public string? LocalAddress{get;set;}public string? RemoteAddress{get;set;}public string? Description{get;set;}

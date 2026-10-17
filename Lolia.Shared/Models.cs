@@ -1,6 +1,6 @@
 using System.Text.Json;
 namespace Lolia.Shared;
-public record Tunnel(string Id,string Name,bool AutoStart=false, string? Type=null, string? Node=null, string? LocalAddress=null, string? RemoteAddress=null, string? Description=null);
+public record Tunnel(string Id,string Name,bool AutoStart=false, string? Type=null, string? Node=null, string? LocalAddress=null, string? RemoteAddress=null, string? Description=null,string? Credential=null);
 public record TunnelView(string Id,string Name,bool AutoStart,bool Running,string? Type,string? Node,string? LocalAddress,string? RemoteAddress,string? Description,
     long? TotalBytesIn=null,long? TotalBytesOut=null,double? DownloadBytesPerSecond=null,double? UploadBytesPerSecond=null,string? MetricsSource=null);
 public record Command(string Action,string? Id=null,string? Value=null);

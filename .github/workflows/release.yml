@@ -17,6 +17,11 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
+      - name: Test API contracts
+        shell: pwsh
+        run: |
+          dotnet run --project Lolia.Tests/Lolia.Tests.csproj -c Release
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
       - name: Build and publish Windows x64
         shell: pwsh
         run: |
@@ -25,7 +30,14 @@ jobs:
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           dotnet publish Lolia.Service/Lolia.Service.csproj -c Release -r win-x64 --self-contained true -o dist/Service
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
-          Copy-Item install-service.cmd,uninstall-service.cmd,README.md,README.zh-CN.md dist/
+          Invoke-WebRequest 'https://github.com/Lolia-FRP/lolia-frp/releases/download/v0.71.2/LoliaFrp_windows_amd64.zip' -OutFile frpc-upstream.zip
+          if ((Get-FileHash frpc-upstream.zip -Algorithm SHA256).Hash.ToLowerInvariant() -ne '208a9a4c6d4d6f0a3c07cd2257c821b8cf3d7e49b809b34e3d5f2367dcb9127e') { throw 'Official frpc checksum mismatch' }
+          Expand-Archive frpc-upstream.zip -DestinationPath upstream-client
+          $frpc = Get-ChildItem upstream-client -Filter frpc.exe -Recurse | Select-Object -First 1
+          if (-not $frpc) { throw 'Official frpc executable not found' }
+          Copy-Item $frpc.FullName dist/frpc.exe
+          Copy-Item install-service.cmd,uninstall-service.cmd,README.md,README.zh-CN.md,THIRD-PARTY-NOTICES.md dist/
+          Copy-Item licenses dist/licenses -Recurse
       - name: Verify service installation and IPC
         shell: pwsh
         run: |
@@ -58,19 +70,12 @@ jobs:
             LoliaBloom-win-x64.zip
             LoliaBloom-screenshot.png
           if-no-files-found: error
-      - name: Publish v0.4.0
+      - name: Publish v0.4.1
         env:
           GH_TOKEN: ${{ github.token }}
         shell: pwsh
         run: |
-          gh release view v0.4.0 *> $null
-          if ($LASTEXITCODE -eq 0) {
-            $tagSha = gh api repos/kkbbzjh/LoliaBloom/git/ref/tags/v0.4.0 --jq '.object.sha'
-            if ($tagSha -ne 'ce47e300a6159498a8b7a537aa57b57a47ad5376') { throw 'Existing release is not from this initial build; refusing replacement.' }
-            gh api --method PATCH repos/kkbbzjh/LoliaBloom/git/refs/tags/v0.4.0 -f sha='${{ github.sha }}' -F force=false
-            if ($LASTEXITCODE) { exit $LASTEXITCODE }
-            gh release upload v0.4.0 LoliaBloom-win-x64.zip LoliaBloom-screenshot.png --clobber
-            exit $LASTEXITCODE
-          }
-          gh release create v0.4.0 LoliaBloom-win-x64.zip LoliaBloom-screenshot.png --target '${{ github.sha }}' --title 'Lolia Bloom v0.4.0' --notes 'Windows x64 portable prototype. Includes one-click Windows Service installation. OAuth, tunnel API, check-in and traffic integrations still require live verification; see README.'
+          gh release view v0.4.1 *> $null
+          if ($LASTEXITCODE -eq 0) { throw 'v0.4.1 already exists; refusing to replace it.' }
+          gh release create v0.4.1 LoliaBloom-win-x64.zip LoliaBloom-screenshot.png --target '${{ github.sha }}' --title '洛链绽放 · Lolia Bloom v0.4.1' --notes 'Adds documented cloud tunnel creation (TCP/UDP/HTTP/HTTPS), paginated tunnel sync, encrypted saved login with token refresh, automatic tunnel credential sync, and official traffic counters with estimated rates. Adds the official dashboard check-in request and optional hourly checks while the app runs. Live account authorization and check-in OAuth compatibility require account verification.'
           if ($LASTEXITCODE) { exit $LASTEXITCODE }

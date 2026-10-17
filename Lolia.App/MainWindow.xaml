@@ -6,10 +6,10 @@
 <Border Background="#FFF0F5" CornerRadius="10" Padding="12" Margin="0,0,0,12">
 <StackPanel>
 <TextBlock Text="🌸 每日签到" FontWeight="Bold" FontSize="17" Foreground="#D63378"/>
-<TextBlock Name="CheckinStatus" Text="签到状态：未查询（官方签到接口待核实）" Margin="0,6,0,8" Foreground="#8F4168"/>
+<TextBlock Name="CheckinStatus" Text="请登录后查询今日签到状态" Margin="0,6,0,8" Foreground="#8F4168"/>
 <WrapPanel>
 <Button Content="手动签到" Click="Checkin_Click"/>
-<CheckBox Name="AutoCheckin" Content="每日自动签到（待官方接口及规则验证后开放）" IsEnabled="False" VerticalAlignment="Center" Margin="12,0,0,0"/>
+<CheckBox Name="AutoCheckin" Content="自动签到（程序运行时，每小时检查重试）" VerticalAlignment="Center" Margin="12,0,0,0"/>
 </WrapPanel>
 </StackPanel>
 </Border>
@@ -22,15 +22,15 @@
 <Button Content="卸载后台服务" Click="Uninstall_Click" Padding="12,8"/>
 </WrapPanel>
 <TextBlock Name="Status" Foreground="#B43870" Text="正在检查服务" TextWrapping="Wrap" Margin="0,0,0,5"/>
-<TextBlock Text="速度、累计流量来自平台 API；未获得有效数据时显示 —，不会伪造实时数值。" Foreground="Gray" Margin="0,0,0,12"/>
+<TextBlock Text="流量来自官方接口；速度按累计流量与服务端更新时间差分估算，首次采样显示 —。" Foreground="Gray" Margin="0,0,0,12"/>
 </StackPanel>
 <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="0,12,0,0"><Button Content="查看选中隧道详情" Click="Details_Click" Padding="14,8" Margin="0,0,8,0"/><Button Content="设置/取消开机连接" Click="Auto_Click" Padding="14,8"/></StackPanel>
 <DataGrid Name="TunnelGrid" AutoGenerateColumns="False" IsReadOnly="True" SelectionMode="Single" CanUserAddRows="False" RowHeight="43" AlternationCount="2">
 <DataGrid.Columns>
 <DataGridTextColumn Header="隧道名称" Binding="{Binding Name}" Width="1.7*"/>
 <DataGridTextColumn Header="协议" Binding="{Binding Type}" Width="70"/>
-<DataGridTextColumn Header="下载速度" Binding="{Binding DownloadText}" Width="110"/>
-<DataGridTextColumn Header="上传速度" Binding="{Binding UploadText}" Width="110"/>
+<DataGridTextColumn Header="下载估算" Binding="{Binding DownloadText}" Width="110"/>
+<DataGridTextColumn Header="上传估算" Binding="{Binding UploadText}" Width="110"/>
 <DataGridTextColumn Header="累计下载" Binding="{Binding TotalInText}" Width="110"/>
 <DataGridTextColumn Header="累计上传" Binding="{Binding TotalOutText}" Width="110"/>
 <DataGridTextColumn Header="连接状态" Binding="{Binding StateText}" Width="95"/>

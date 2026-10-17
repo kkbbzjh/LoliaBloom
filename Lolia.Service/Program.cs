@@ -1,4 +1,5 @@
 using Lolia.Shared;
+using System.Security.Cryptography;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using System.IO.Pipes;
@@ -18,7 +19,7 @@ sealed class Manager:BackgroundService {
  readonly object gate=new();
  List<Tunnel> tunnels=new();
  protected override async Task ExecuteAsync(CancellationToken ct) {
-  try { if(File.Exists(Paths.Tunnels)) tunnels=JsonSerializer.Deserialize<List<Tunnel>>(await File.ReadAllTextAsync(Paths.Tunnels,ct),Paths.Json)??new(); }catch{}
+  try { if(File.Exists(Paths.Tunnels)) tunnels=JsonSerializer.Deserialize<List<Tunnel>>(ProtectedData.Unprotect(await File.ReadAllBytesAsync(Paths.Tunnels,ct),null,DataProtectionScope.LocalMachine),Paths.Json)??new(); }catch{}
   foreach(var t in tunnels.Where(t=>t.AutoStart)) Start(t.Id);
   while(!ct.IsCancellationRequested){
    try{
@@ -43,7 +44,7 @@ sealed class Manager:BackgroundService {
    case "list": return new(true,"OK",JsonSerializer.Serialize(tunnels.Select(t=>new TunnelView(t.Id,t.Name,t.AutoStart,IsRunning(t.Id),t.Type,t.Node,t.LocalAddress,t.RemoteAddress,t.Description)),Paths.Json));
    case "sync": {
     var incoming=JsonSerializer.Deserialize<List<Tunnel>>(c.Value??"[]",Paths.Json)??new();
-    if(incoming.Count>500||incoming.Any(t=>!System.Text.RegularExpressions.Regex.IsMatch(t.Id,@"^[0-9A-Za-z_-]{1,100}$")))return new(false,"Invalid tunnel IDs");
+    if(incoming.Select(t=>t.Id).Distinct().Count()!=incoming.Count||incoming.Count>10000||incoming.Any(t=>!System.Text.RegularExpressions.Regex.IsMatch(t.Id,@"^[0-9A-Za-z_-]{1,100}$")))return new(false,"Invalid tunnel IDs");
     var old=tunnels.ToDictionary(x=>x.Id);
     tunnels=incoming.Select(t=>t with{AutoStart=old.TryGetValue(t.Id,out var v)&&v.AutoStart}).ToList();
     await Save(ct);return new(true,$"Synced {tunnels.Count} tunnels");
@@ -57,7 +58,7 @@ sealed class Manager:BackgroundService {
    default:return new(false,"Unknown command");
   }
  }
- async Task Save(CancellationToken ct){Paths.Ensure();await File.WriteAllTextAsync(Paths.Tunnels,JsonSerializer.Serialize(tunnels,Paths.Json),ct);}
+ async Task Save(CancellationToken ct){Paths.Ensure();var bytes=ProtectedData.Protect(JsonSerializer.SerializeToUtf8Bytes(tunnels,Paths.Json),null,DataProtectionScope.LocalMachine);await File.WriteAllBytesAsync(Paths.Tunnels+".tmp",bytes,ct);var acl=new FileSecurity();acl.SetAccessRuleProtection(true,false);foreach(var sid in new[]{WellKnownSidType.LocalSystemSid,WellKnownSidType.BuiltinAdministratorsSid})acl.AddAccessRule(new FileSystemAccessRule(new SecurityIdentifier(sid,null),FileSystemRights.FullControl,AccessControlType.Allow));FileSystemAclExtensions.SetAccessControl(new FileInfo(Paths.Tunnels+".tmp"),acl);File.Move(Paths.Tunnels+".tmp",Paths.Tunnels,true);}
  bool IsRunning(string id){lock(gate)return running.TryGetValue(id,out var p)&&!p.HasExited;}
  bool Start(string id){
   if(!tunnels.Any(t=>t.Id==id)||!File.Exists(Paths.Frpc))return false;
@@ -65,9 +66,8 @@ sealed class Manager:BackgroundService {
    if(IsRunning(id))return true;
    var psi=new ProcessStartInfo(Paths.Frpc){UseShellExecute=false,CreateNoWindow=true,WorkingDirectory=Paths.Root};
    // Lolia requires an authorized per-tunnel credential. Never launch with a bare ID.
-   var keyPath=Path.Combine(Paths.Root,"keys",id+".txt");
-   if(!File.Exists(keyPath))return false;
-   var key=File.ReadAllText(keyPath).Trim();
+   var key=tunnels.First(t=>t.Id==id).Credential;
+   if(string.IsNullOrWhiteSpace(key)){var keyPath=Path.Combine(Paths.Root,"keys",id+".txt");if(!File.Exists(keyPath))return false;key=File.ReadAllText(keyPath).Trim();}
    if(string.IsNullOrWhiteSpace(key))return false;
    psi.ArgumentList.Add("-t");psi.ArgumentList.Add(id+":"+key);
    var p=Process.Start(psi);if(p==null)return false;running[id]=p;return true;

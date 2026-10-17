@@ -4,9 +4,14 @@ A pink-themed Windows desktop client for managing Lolia FRP tunnels.
 
 [English](README.md) | [简体中文](README.zh-CN.md)
 
-![Lolia Bloom — Windows interface](https://github.com/kkbbzjh/LoliaBloom/releases/download/v0.4.0/LoliaBloom-screenshot.png)
+![Lolia Bloom — Windows interface](https://github.com/kkbbzjh/LoliaBloom/releases/download/v0.4.1/LoliaBloom-screenshot.png)
 
 ## Features
+
+- **Cloud tunnel creation** — select a node and create TCP, UDP, HTTP or HTTPS tunnels.
+- **Saved login** — OAuth PKCE, encrypted credentials and automatic token refresh.
+- **Official traffic counters** — cumulative bytes and rates estimated from server timestamps.
+- **Check-in** — manual check-in and optional hourly checks while the app is open; OAuth restrictions are reported by the server.
 
 - **Pink interface** — a clean tunnel list with per-tunnel start and stop buttons.
 - **Tunnel details** — view protocol, node, local and remote addresses, and connection status.

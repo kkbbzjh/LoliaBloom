@@ -1,0 +1,1 @@
+The Windows portable distribution includes frpc.exe from Lolia-FRP/lolia-frp v0.71.2, licensed under Apache License 2.0. Source: https://github.com/Lolia-FRP/lolia-frp/tree/v0.71.2 . The license is included under licenses/lolia-frp-LICENSE. No changes were made to that executable.

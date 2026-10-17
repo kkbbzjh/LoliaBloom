@@ -4,9 +4,14 @@
 
 [English](README.md) | [简体中文](README.zh-CN.md)
 
-![Lolia Bloom Windows 实际界面](https://github.com/kkbbzjh/LoliaBloom/releases/download/v0.4.0/LoliaBloom-screenshot.png)
+![Lolia Bloom Windows 实际界面](https://github.com/kkbbzjh/LoliaBloom/releases/download/v0.4.1/LoliaBloom-screenshot.png)
 
 ## 功能特色
+
+- **云端创建隧道**：选择节点，创建 TCP、UDP、HTTP、HTTPS 隧道。
+- **记住登录**：OAuth PKCE 授权、Windows 加密保存与自动刷新令牌。
+- **官方流量统计**：显示累计流量，并根据服务端更新时间估算速度。
+- **签到中心**：手动签到，程序运行时可每小时检查自动签到；授权限制会显示官方错误。
 
 - **粉色管理界面**：清晰展示隧道列表，直接启动或停止单条隧道。
 - **隧道详情**：查看协议、节点、本地地址、远程地址和连接状态。
