@@ -68,7 +68,7 @@ public partial class MainWindow:Window {
     var line=await reader.ReadLineAsync(timeout.Token);
     if(line==null)throw new IOException("后台服务意外关闭连接，请重新安装服务后重试");
     return JsonSerializer.Deserialize<Reply>(line,Paths.Json)??throw new IOException("后台服务返回了空响应");
-   }catch(OperationCanceledException){throw new TimeoutException("后台服务正在运行，但 15 秒内未响应。请点击一键安装后台服务进行修复，并关闭其他旧版窗口。");}
+   }catch(OperationCanceledException){throw new System.TimeoutException("后台服务正在运行，但 15 秒内未响应。请点击一键安装后台服务进行修复，并关闭其他旧版窗口。");}
    catch(UnauthorizedAccessException){throw new IOException("Windows 拒绝访问后台服务通信通道，请重新安装服务修复权限。");}
   }finally{pipeGate.Release();}
  }
