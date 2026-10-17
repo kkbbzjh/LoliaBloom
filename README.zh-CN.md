@@ -1,42 +1,20 @@
 # 🌸 Lolia Bloom（洛莉绽放）
 
-**面向 Lolia FRP 的第三方 Windows 桌面客户端。**
+采用粉色主题的 Lolia FRP Windows 桌面隧道管理客户端。
 
 [English](README.md) | [简体中文](README.zh-CN.md)
 
-> **开发状态：早期原型。** 尚未完成 Windows 实际编译验证及 Lolia 官方 API 的真实联调，暂不建议用于生产环境。
+![Lolia Bloom Windows 实际界面](https://github.com/kkbbzjh/LoliaBloom/releases/download/v0.4.0/LoliaBloom-screenshot.png)
 
-Lolia Bloom 计划提供清爽的粉色管理界面，并通过独立 Windows 后台服务托管穿透进程，让你关闭窗口后仍能保持连接。
+## 功能特色
 
-## 计划功能
+- **粉色管理界面**：清晰展示隧道列表，直接启动或停止单条隧道。
+- **隧道详情**：查看协议、节点、本地地址、远程地址和连接状态。
+- **独立后台服务**：关闭程序窗口后，隧道进程仍可继续运行。
+- **一键安装服务**：在程序内申请管理员权限，安装或卸载 Windows Service。
+- **开机自动连接**：为每条隧道设置是否随后台服务自动启动。
+- **Windows x64 绿色版**：解压即可打开，内置 .NET 运行环境。
 
-- **账号登录**：OAuth 授权登录并同步云端隧道
-- **四种协议**：TCP、UDP、HTTP、HTTPS（以官方 API 实际能力为准）
-- **列表快捷操作**：直接启动或停止单条隧道，无需进入详情
-- **流量监控**：显示实时上传/下载速度、累计流量及手动刷新；仅使用真实可用的数据源
-- **详情页面**：节点、本地/远程配置、运行状态、日志和异常信息
-- **后台服务**：绿色版一键申请管理员权限、注册 Windows Service、设置开机启动
-- **签到中心**：主页展示签到状态；每日自动签到仅在官方允许且接口可用时启用
-- **云端隧道管理**：创建、编辑、删除功能需先核实 API 请求字段和授权范围
+[下载 Windows x64 绿色版](https://github.com/kkbbzjh/LoliaBloom/releases/latest)
 
-## 下载与安装
-
-项目规划采用 **绿色版 + 一键注册服务**，不要求用户手动输入服务安装命令。
-
-V0.4 源码已包含在仓库中。GitHub Actions 构建 Windows x64 自包含绿色版，并验证服务安装与进程间通信。
-
-未来可从 [Releases 下载页面](https://github.com/kkbbzjh/LoliaBloom/releases) 获取 ZIP。安装 Windows 服务需要确认管理员权限。
-
-## 开发与反馈
-
-欢迎提交 Issue、功能建议和 Pull Request。提交日志时请先删除 OAuth Token、连接密钥及其他敏感信息。
-
-## 声明
-
-本项目为非官方社区客户端，未获得 Lolia FRP 官方背书。相关品牌和商标归原权利人所有。目前尚未选定开源许可证，代码复用及分发请以仓库后续许可证为准。
-
-## 绿色版使用
-
-完整解压 ZIP，运行 `Lolia.App.exe`，点击安装服务按钮并确认 UAC。`Service` 文件夹必须保留在程序旁边。服务安装到 Program Files，数据保留在 `%ProgramData%\LoliaBloom`。
-
-请另行下载官方 `frpc.exe` 放在安装脚本旁。OAuth 需要注册回调 `http://localhost:1145`，将 Client ID 写入数据目录下的 `client-id.txt`；隧道凭据写入 `keys/<id>.txt`。签到、每日自动签到、云端创建和流量统计在此原型中尚未接通，不能视为已实现功能。
+本项目为社区第三方客户端，与 Lolia FRP 官方无隶属关系。

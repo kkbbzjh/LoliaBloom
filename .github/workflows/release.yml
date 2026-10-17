@@ -47,11 +47,16 @@ jobs:
             Stop-Service LoliaBloomService -ErrorAction SilentlyContinue
             sc.exe delete LoliaBloomService
           }
+          $app = Start-Process (Join-Path $PWD 'dist/Lolia.App.exe') -ArgumentList '--screenshot', (Join-Path $PWD 'LoliaBloom-screenshot.png') -PassThru
+          if (-not $app.WaitForExit(30000)) { $app.Kill(); throw 'Screenshot timed out' }
+          if (-not (Test-Path LoliaBloom-screenshot.png)) { throw 'Screenshot missing' }
           Compress-Archive dist/* LoliaBloom-win-x64.zip -Force
       - uses: actions/upload-artifact@v4
         with:
           name: LoliaBloom-win-x64
-          path: LoliaBloom-win-x64.zip
+          path: |
+            LoliaBloom-win-x64.zip
+            LoliaBloom-screenshot.png
           if-no-files-found: error
       - name: Publish v0.4.0
         env:
@@ -62,5 +67,5 @@ jobs:
           if ($LASTEXITCODE -eq 0) {
             throw 'v0.4.0 already exists; refusing to replace an existing release automatically.'
           }
-          gh release create v0.4.0 LoliaBloom-win-x64.zip --target '${{ github.sha }}' --title 'Lolia Bloom v0.4.0' --notes 'Windows x64 portable prototype. Includes one-click Windows Service installation. OAuth, tunnel API, check-in and traffic integrations still require live verification; see README.'
+          gh release create v0.4.0 LoliaBloom-win-x64.zip LoliaBloom-screenshot.png --target '${{ github.sha }}' --title 'Lolia Bloom v0.4.0' --notes 'Windows x64 portable prototype. Includes one-click Windows Service installation. OAuth, tunnel API, check-in and traffic integrations still require live verification; see README.'
           if ($LASTEXITCODE) { exit $LASTEXITCODE }

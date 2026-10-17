@@ -52,6 +52,21 @@ public partial class MainWindow:Window {
   if(json.RootElement.TryGetProperty("refresh_token",out var rt))refreshToken=rt.GetString();
   Status.Text="授权成功（仅保存在 GUI 进程内）；请点击同步隧道";
  }
+ protected override void OnContentRendered(EventArgs e) {
+  base.OnContentRendered(e);
+  var args=Environment.GetCommandLineArgs();
+  var index=Array.IndexOf(args,"--screenshot");
+  if(index<0||index+1>=args.Length)return;
+  Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.ApplicationIdle,new System.Action(()=>{
+   UpdateLayout();
+   var bitmap=new System.Windows.Media.Imaging.RenderTargetBitmap((int)ActualWidth,(int)ActualHeight,96,96,System.Windows.Media.PixelFormats.Pbgra32);
+   bitmap.Render(this);
+   var encoder=new System.Windows.Media.Imaging.PngBitmapEncoder();
+   encoder.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(bitmap));
+   using(var output=File.Create(args[index+1]))encoder.Save(output);
+   System.Windows.Application.Current.Shutdown();
+  }));
+ }
  static string Base64(byte[] bytes)=>Convert.ToBase64String(bytes).TrimEnd('=').Replace('+','-').Replace('/','_');
  async void Sync_Click(object s,RoutedEventArgs e)=>await Safe(Sync);
  async Task Sync(){
