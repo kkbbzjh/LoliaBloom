@@ -1,4 +1,4 @@
-# 🌸 Lolia Bloom
+# 🌸 Lolia Bloom · 洛链绽放
 
 A pink-themed Windows desktop client for managing Lolia FRP tunnels.
 

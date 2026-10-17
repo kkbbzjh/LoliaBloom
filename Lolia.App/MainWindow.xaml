@@ -1,7 +1,7 @@
-<Window x:Class="Lolia.App.MainWindow" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" Title="Lolia Bloom" Height="700" Width="1180" MinHeight="520" MinWidth="900" Background="#FFFBFD">
+<Window x:Class="Lolia.App.MainWindow" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" Title="洛链绽放 · Lolia Bloom" Height="700" Width="1180" MinHeight="520" MinWidth="900" Background="#FFFBFD">
 <DockPanel Margin="18">
 <StackPanel DockPanel.Dock="Top">
-<TextBlock Text="🌸 Lolia Bloom" FontSize="27" FontWeight="Bold" Foreground="#D63378"/>
+<TextBlock Text="🌸 洛链绽放 · Lolia Bloom" FontSize="27" FontWeight="Bold" Foreground="#D63378"/>
 <TextBlock Text="账号隧道管理 · Windows 后台服务 · 关闭界面不断线" Foreground="Gray" Margin="0,3,0,14"/>
 <Border Background="#FFF0F5" CornerRadius="10" Padding="12" Margin="0,0,0,12">
 <StackPanel>

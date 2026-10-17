@@ -1,6 +1,6 @@
-# 🌸 Lolia Bloom（洛莉绽放）
+# 🌸 Lolia Bloom（洛链绽放）
 
-采用粉色主题的 Lolia FRP Windows 桌面隧道管理客户端。
+采用粉色主题的 洛链映射（Lolia FRP）Windows 桌面隧道管理客户端。
 
 [English](README.md) | [简体中文](README.zh-CN.md)
 
@@ -17,4 +17,4 @@
 
 [下载 Windows x64 绿色版](https://github.com/kkbbzjh/LoliaBloom/releases/latest)
 
-本项目为社区第三方客户端，与 Lolia FRP 官方无隶属关系。
+本项目为社区第三方客户端，与 洛链映射官方无隶属关系。
