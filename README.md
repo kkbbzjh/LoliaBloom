@@ -44,11 +44,18 @@ Screenshots are rendered by the Windows client using example tunnels and traffic
 
 ### Windows x64
 
-1. Open the [GitHub Releases download page](https://github.com/kkbbzjh/LoliaBloom/releases/latest) and download `LoliaBloom-win-x64.exe`.
-2. Double-click the file to run. It is a self-contained single-file build and does not need a separate .NET installation.
-3. To keep tunnels running after closing the window, choose **Install background service** in the app and approve the Windows administrator prompt.
+#### Single EXE (recommended)
+
+1. Open [GitHub Releases](https://github.com/kkbbzjh/LoliaBloom/releases/latest) and download `LoliaBloom-win-x64.exe`.
+2. Double-click to run. No separate .NET installation is required.
+
+#### ZIP version
 
 Alternatively, download `LoliaBloom-win-x64.zip`, extract it, and run `LoliaBloom.exe`.
+
+#### Install the background service
+
+To keep tunnels running after closing the window, choose **Install background service** in the app and approve the Windows administrator prompt.
 
 ### Linux / NAS (Docker Compose)
 
