@@ -60,7 +60,7 @@ using(var monitor=new Lolia.Service.LocalTrafficMonitor()){
 }
 if(args.Contains("--network-test")){
  using var monitor=new Lolia.Service.LocalTrafficMonitor();monitor.Start();monitor.Register(Environment.ProcessId,"real-test",null);
- using var web=new HttpClient(new HttpClientHandler{UseProxy=false}){Timeout=TimeSpan.FromSeconds(20)};web.DefaultRequestHeaders.UserAgent.ParseAdd("LoliaBloom-Test/0.6.0");await web.GetStringAsync("https://api.github.com/repos/Lolia-FRP/lolia-frp");
+ using var web=new HttpClient(new HttpClientHandler{UseProxy=false}){Timeout=TimeSpan.FromSeconds(20)};web.DefaultRequestHeaders.UserAgent.ParseAdd("LoliaBloom-Test/0.6.0");using var networkResponse=await web.GetAsync("https://github.com/Lolia-FRP/lolia-frp");await networkResponse.Content.ReadAsByteArrayAsync();
  await Task.Delay(2500);var measured=monitor.Get("real-test",true);Assert(measured.Received>0&&measured.Sent>0,"real ETW network capture: "+measured.Source);Console.WriteLine($"PASS: real ETW traffic captured {measured.Received} received / {measured.Sent} sent");
 }
 Console.WriteLine("PASS: pagination, request methods, protocol parsing, credentials, HTTP 201, API errors, traffic sampling");
