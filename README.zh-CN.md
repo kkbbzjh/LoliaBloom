@@ -6,15 +6,15 @@
 
 **实时流量工作台**
 
-![实时上传下载折线图与隧道开关](docs/screenshots/main-v0.6.3.png)
+![实时上传下载折线图与隧道开关](docs/screenshots/main-v0.7.4.png)
 
 **连接详情**
 
-![隧道详情卡片、实时速率与访问地址](docs/screenshots/details-v0.6.3.png)
+![隧道详情卡片、实时速率与访问地址](docs/screenshots/details-v0.7.4.png)
 
 **创建隧道**
 
-![节点筛选与隧道创建界面](docs/screenshots/create-v0.6.3.png)
+![节点筛选与隧道创建界面](docs/screenshots/create-v0.7.4.png)
 
 截图由 Windows 客户端实际渲染，隧道与流量均为示例数据。
 

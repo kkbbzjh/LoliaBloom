@@ -6,15 +6,15 @@ A pink-themed community client for Lolia FRP, with a Windows desktop app and a L
 
 **Live traffic dashboard**
 
-![Live upload and download charts with per-tunnel startup switches](docs/screenshots/main-v0.6.3.png)
+![Live upload and download charts with per-tunnel startup switches](docs/screenshots/main-v0.7.4.png)
 
 **Connection details**
 
-![Tunnel details with live rates and one-click address copying](docs/screenshots/details-v0.6.3.png)
+![Tunnel details with live rates and one-click address copying](docs/screenshots/details-v0.7.4.png)
 
 **Create a tunnel**
 
-![Node filters and tunnel creation](docs/screenshots/create-v0.6.3.png)
+![Node filters and tunnel creation](docs/screenshots/create-v0.7.4.png)
 
 Screenshots are rendered by the Windows client using example tunnels and traffic data.
 
