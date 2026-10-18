@@ -50,6 +50,15 @@ Screenshots are rendered by the Windows client using example tunnels and traffic
 
 ### Linux / NAS (Docker Compose)
 
+One-command installation (Docker Engine and Compose v2 required):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/kkbbzjh/LoliaBloom/main/scripts/install.sh | sh
+```
+
+Generates and saves an administrator password, pulls the image, starts and checks the service, then prints the address and password. Run again to update while keeping configuration and data. The GHCR package must be public for anonymous pulls; cloud login still requires an allowed OAuth callback. Manual deployment follows.
+
+
 Use a Linux host or NAS with Docker Engine and Docker Compose v2. Replace `192.168.1.20` below with its LAN address. After the first image is published, open [GHCR package settings](https://github.com/users/kkbbzjh/packages/container/package/loliabloom) and set visibility to **Public** so Docker can pull anonymously.
 
 ```bash

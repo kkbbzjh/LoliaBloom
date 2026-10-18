@@ -50,6 +50,15 @@
 
 ### Linux / NAS（Docker Compose）
 
+一键安装（已安装 Docker 和 Compose v2 的主机）：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/kkbbzjh/LoliaBloom/main/scripts/install.sh | sh
+```
+
+自动生成并保存管理密码、拉取镜像、启动并检查服务，完成后显示访问地址和密码。再次执行即可更新，保留原配置和数据。首次需要将 GHCR 镜像包设为 Public；官网登录仍需允许对应 OAuth 回调地址。以下为手动部署方式。
+
+
 准备一台已安装 Docker Engine 和 Docker Compose v2 的 Linux 主机或 NAS。将下方的 `192.168.1.20` 换成主机的局域网地址。首次发布镜像后，请打开 [GHCR 镜像包设置](https://github.com/users/kkbbzjh/packages/container/package/loliabloom)，将可见性设为 **Public**，之后即可匿名拉取。
 
 ```bash

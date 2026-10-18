@@ -51,6 +51,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          trap 'docker logs loliabloom-smoke 2>&1; docker rm -f loliabloom-smoke' EXIT
           docker pull ghcr.io/kkbbzjh/loliabloom:sha-${GITHUB_SHA::7}
           docker run -d --name loliabloom-smoke -e LOLIABLOOM_ADMIN_PASSWORD='workflow-test-password-123' -p 127.0.0.1:18080:8080 ghcr.io/kkbbzjh/loliabloom:sha-${GITHUB_SHA::7}
           for attempt in $(seq 1 30); do
@@ -60,5 +61,3 @@ jobs:
           curl --fail --silent http://127.0.0.1:18080/health | grep -q '"status":"ok"'
           status=$(curl --silent --output /dev/null --write-out '%{http_code}' http://127.0.0.1:18080/)
           test "$status" = 302
-          docker logs loliabloom-smoke
-          docker rm -f loliabloom-smoke
