@@ -1,0 +1,32 @@
+services:
+  loliabloom:
+    image: ghcr.io/kkbbzjh/loliabloom:latest
+    container_name: loliabloom
+    restart: unless-stopped
+    init: true
+    ports:
+      - "${LOLIABLOOM_BIND:-0.0.0.0}:${LOLIABLOOM_PORT:-8080}:8080"
+    environment:
+      LOLIABLOOM_ADMIN_PASSWORD: ${LOLIABLOOM_ADMIN_PASSWORD:?Set LOLIABLOOM_ADMIN_PASSWORD in .env}
+      LOLIABLOOM_DATA: /data
+      LOLIABLOOM_PUBLIC_URL: ${LOLIABLOOM_PUBLIC_URL:-http://localhost:8080}
+      LOLIABLOOM_OAUTH_REDIRECT_URL: ${LOLIABLOOM_OAUTH_REDIRECT_URL:-}
+      LOLIA_OAUTH_CLIENT_ID: ${LOLIA_OAUTH_CLIENT_ID:-3k9iwlin05pwdv7g}
+    volumes:
+      - loliabloom-data:/data
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp:size=32m,noexec,nosuid
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://127.0.0.1:8080/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  loliabloom-data:

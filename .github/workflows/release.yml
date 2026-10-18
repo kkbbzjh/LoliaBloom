@@ -125,12 +125,12 @@ jobs:
             LoliaBloom-create.png
             LoliaBloom-details.png
           if-no-files-found: error
-      - name: Publish v0.6.3
+      - name: Publish v0.7.0
         env:
           GH_TOKEN: ${{ github.token }}
         shell: pwsh
         run: |
-          gh release view v0.6.3 *> $null
-          if ($LASTEXITCODE -eq 0) { throw 'v0.6.3 already exists; refusing to replace it.' }
-          gh release create v0.6.3 LoliaBloom-win-x64.exe LoliaBloom-win-x64.zip LoliaBloom-screenshot.png LoliaBloom-create.png LoliaBloom-details.png --target '${{ github.sha }}' --title '洛链绽放 · Lolia Bloom v0.6.3' --notes 'Adds live 60-second local traffic charts and a redesigned tunnel details window with live metrics, startup state and address copying. Keeps a single website check-in entry in the lower-left corner and removes calendar-day check-in wording. Retains single EXE packaging, independent startup switches and FRP updates.'
+          gh release view v0.7.0 *> $null
+          if ($LASTEXITCODE -eq 0) { throw 'v0.7.0 already exists; refusing to replace it.' }
+          gh release create v0.7.0 LoliaBloom-win-x64.exe LoliaBloom-win-x64.zip LoliaBloom-screenshot.png LoliaBloom-create.png LoliaBloom-details.png --target '${{ github.sha }}' --title '洛链绽放 · Lolia Bloom v0.7.0' --notes 'Adds a Linux Docker web manager for Lolia FRP tunnels with secure administrator login, cloud sync, per-tunnel start/stop and startup switches, container network traffic charts and verified FRP updates. Keeps the Windows x64 single-file and ZIP releases.'
           if ($LASTEXITCODE) { exit $LASTEXITCODE }

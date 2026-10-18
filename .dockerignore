@@ -1,0 +1,10 @@
+.git
+.github
+**/bin
+**/obj
+dist
+release
+*.png
+*.zip
+*.exe
+.env

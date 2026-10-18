@@ -1,6 +1,6 @@
 # 🌸 Lolia Bloom（洛链绽放）
 
-采用粉色主题的 洛链映射（Lolia FRP）Windows 桌面隧道管理客户端。
+洛链映射（Lolia FRP）的粉色主题社区客户端，提供 Windows 桌面版和 Linux Docker 网页管理版。
 
 [English](README.md) | [简体中文](README.zh-CN.md)
 
@@ -35,8 +35,35 @@
 - **一键安装服务**：在程序内申请管理员权限，安装或卸载 Windows Service。
 - **开机自动连接**：每条隧道独立胶囊开关，同步和重启后保留设置；开机网络未就绪时重试，手动停止后取消本轮重试。
 - **Windows x64 单文件版**：双击一个 EXE，自动准备运行环境；同时提供 ZIP 版。
+- **Linux 网页版**：Docker Compose 部署，可登录管理台、同步云端隧道、逐条启动/停止与设置容器重启后自动连接，并在线更新经过 SHA256 校验的 FRP。
+- **Docker 实时流量**：显示容器网络接口最近 60 秒流量曲线，统计包含网页管理流量；官网累计流量单独显示。
 
 [下载 Windows x64 绿色版](https://github.com/kkbbzjh/LoliaBloom/releases/latest)
+
+### Docker 部署
+
+准备一台装有 Docker Compose 的 Linux 主机或 NAS。将 `192.168.1.20` 换成该主机的局域网地址。首次使用请先打开 [GHCR 镜像包设置](https://github.com/users/kkbbzjh/packages/container/package/loliabloom)，将可见性设为 **Public**，之后无需登录即可拉取镜像。
+
+```bash
+mkdir -p ~/loliabloom && cd ~/loliabloom
+curl -fsSLO https://raw.githubusercontent.com/kkbbzjh/LoliaBloom/main/compose.yaml
+curl -fsSLO https://raw.githubusercontent.com/kkbbzjh/LoliaBloom/main/.env.example
+cp .env.example .env
+openssl rand -base64 32
+```
+
+把 `openssl` 生成的随机值填入 `.env` 的 `LOLIABLOOM_ADMIN_PASSWORD`，再设置 `LOLIABLOOM_PUBLIC_URL=http://192.168.1.20:8080`，启动：
+
+```bash
+docker compose pull
+docker compose up -d
+```
+
+浏览器打开 `http://192.168.1.20:8080`，输入管理员密码。需要通过互联网访问时，应先配置 HTTPS 反向代理，并将 `LOLIABLOOM_PUBLIC_URL` 改为 HTTPS 公网地址。
+
+官网账号授权需要 OAuth 应用允许完整回调地址 `{LOLIABLOOM_PUBLIC_URL}/auth/callback`。默认官方 Client ID 若未登记此回调地址，授权服务会拒绝登录；请在 `.env` 中使用已登记该地址的 `LOLIA_OAUTH_CLIENT_ID`，并将相同的回调地址登记到该 OAuth 应用。`LOLIABLOOM_OAUTH_REDIRECT_URL` 可用于指定已登记的完整回调地址。
+
+常用维护命令：`docker compose logs -f` 查看日志，`docker compose pull && docker compose up -d` 更新洛链绽放，`docker compose down` 停止服务。隧道与登录凭据保存在 Docker 命名卷 `loliabloom-data` 中。
 
 本项目为社区第三方客户端，与 洛链映射官方无隶属关系。
 
