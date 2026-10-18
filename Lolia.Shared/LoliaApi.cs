@@ -8,6 +8,7 @@ public sealed record CloudTunnel(string Id,string CloudName,string Label,string 
 public sealed record CloudNode(int Id,string Name,string Status,string[] Protocols,bool NeedKyc,bool BeianRequired,string Region="") {
  public string Display=>$"{Name} · {Status}"+(NeedKyc?" · 需实名":"")+(BeianRequired?" · 域名需备案":"");
 }
+public sealed record AccountTraffic(long Limit,long Used,long Remaining);
 public sealed record TrafficSample(long In,long Out,DateTimeOffset? UpdatedAt);
 public sealed record TrafficRate(double? In,double? Out);
 public sealed class TrafficSampler {
@@ -63,6 +64,7 @@ public sealed class LoliaApi(HttpClient http,Func<Task<string>> getToken) {
  }
  public async Task<string> TunnelToken(string name){var d=await Request(HttpMethod.Get,"/user/tunnel/"+Uri.EscapeDataString(name));return Str(d,"tunnel_token")??throw new InvalidOperationException("官方未返回隧道连接凭据");}
  public async Task<TrafficSample> Traffic(string name){var d=await Request(HttpMethod.Get,"/user/traffic/tunnel/"+Uri.EscapeDataString(name));return new(d.GetProperty("traffic_in").GetInt64(),d.GetProperty("traffic_out").GetInt64(),DateTimeOffset.TryParse(Str(d,"updated_at"),out var time)?time:null);}
+ public async Task<AccountTraffic> TrafficStats(){var d=await Request(HttpMethod.Get,"/user/traffic/stats");return new(d.GetProperty("traffic_limit").GetInt64(),d.GetProperty("traffic_used").GetInt64(),d.GetProperty("traffic_remaining").GetInt64());}
  public Task<JsonElement> User()=>Request(HttpMethod.Get,"/user/info");
  public Task<JsonElement> Create(Dictionary<string,object> values)=>Request(HttpMethod.Post,"/user/tunnel",values);
  public static string? Str(JsonElement x,string key)=>x.TryGetProperty(key,out var v)&&v.ValueKind!=JsonValueKind.Null?v.ToString():null;

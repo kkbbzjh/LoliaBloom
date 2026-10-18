@@ -22,6 +22,7 @@ var handler=new Fake(async r=>{
  if(path.Contains("/user/tunnel?page=1"))return Json("""{"code":200,"data":{"list":[{"id":12,"name":"cloud-name","remark":"SSH","type":"tcp","node_name":"HK","node_address":"hk.example","local_ip":"127.0.0.1","local_port":22,"remote_port":20001}],"total":2}}""");
  if(path.Contains("/user/tunnel?page=2"))return Json("""{"code":200,"data":{"list":[{"id":13,"name":"other","type":"https","custom_domain":"test.example"}],"total":2}}""");
  if(path.EndsWith("/user/nodes")){Assert(r.Method==HttpMethod.Post,"nodes method");Assert((await r.Content!.ReadAsStringAsync()).Contains("page"),"nodes body");return Json("""{"code":200,"data":{"nodes":[{"id":1,"name":"HK","status":"online","supported_protocols":["tcp","https"],"need_kyc":true,"beian_required":false}],"total":1}}""");}
+ if(path.EndsWith("/user/traffic/stats"))return Json("""{"status":0,"data":{"traffic_limit":107374182400,"traffic_used":1073741824,"traffic_remaining":106300440576}}""");
  if(path.EndsWith("/user/tunnel/cloud-name"))return Json("""{"code":200,"data":{"tunnel_token":"connection-secret"}}""");
  if(path.EndsWith("/user/traffic/tunnel/cloud-name"))return Json("""{"code":200,"data":{"traffic_in":1024,"traffic_out":2048,"updated_at":"2026-10-17T12:00:00+08:00"}}""");
  if(path.EndsWith("/user/tunnel")&&r.Method==HttpMethod.Post)return Json("""{"code":201,"data":{"id":14}}""",HttpStatusCode.Created);
@@ -29,6 +30,7 @@ var handler=new Fake(async r=>{
  throw new Exception("Unexpected path: "+path);
 });
 var api=new LoliaApi(new HttpClient(handler),()=>Task.FromResult("test-token"));
+var quota=await api.TrafficStats();Assert(quota.Limit==107374182400L&&quota.Used==1073741824L&&quota.Remaining==106300440576L,"account traffic fields and 64-bit counters");
 var tunnels=await api.Tunnels();Assert(tunnels.Count==2,"paging");Assert(tunnels[0].Label=="SSH"&&tunnels[0].CloudName=="cloud-name","remark must not replace API identifier");Assert(tunnels[1].RemoteAddress=="https://test.example","https remote address");
 Assert((await api.Nodes())[0].Protocols.Contains("https"),"node protocol parsing");Assert(await api.TunnelToken("cloud-name")=="connection-secret","detail credentials");Assert((await api.Traffic("cloud-name")).In==1024,"traffic contract");await api.Create(new(){{"type","https"},{"custom_domain","test.example"}});
 try{await api.Request(HttpMethod.Post,"/user/checkin");throw new Exception("expected 403");}catch(InvalidOperationException e){Assert(e.Message.Contains("OAuth2 not supported"),"business errors must be visible");}
