@@ -125,12 +125,12 @@ jobs:
             LoliaBloom-create.png
             LoliaBloom-details.png
           if-no-files-found: error
-      - name: Publish v0.7.1
+      - name: Publish v0.7.2
         env:
           GH_TOKEN: ${{ github.token }}
         shell: pwsh
         run: |
-          gh release view v0.7.1 *> $null
-          if ($LASTEXITCODE -eq 0) { Write-Host 'v0.7.1 already exists; skipping the duplicate release.'; exit 0 }
-          gh release create v0.7.1 LoliaBloom-win-x64.exe LoliaBloom-win-x64.zip LoliaBloom-screenshot.png LoliaBloom-create.png LoliaBloom-details.png --target '${{ github.sha }}' --title '洛链绽放 · Lolia Bloom v0.7.1' --notes 'Adds account traffic quota, used traffic and remaining traffic to the Windows and Linux dashboards using the official traffic stats API. Includes clearer refresh and error states.'
+          gh release view v0.7.2 *> $null
+          if ($LASTEXITCODE -eq 0) { Write-Host 'v0.7.2 already exists; skipping the duplicate release.'; exit 0 }
+          gh release create v0.7.2 LoliaBloom-win-x64.exe LoliaBloom-win-x64.zip LoliaBloom-screenshot.png LoliaBloom-create.png LoliaBloom-details.png --target '${{ github.sha }}' --title '洛链绽放 · Lolia Bloom v0.7.2' --notes 'Adds TCP, UDP, HTTP and HTTPS node category filtering to the tunnel creation window. The filter stays synchronized with the selected tunnel protocol and combines with search, region and online status filters.'
           if ($LASTEXITCODE) { exit $LASTEXITCODE }

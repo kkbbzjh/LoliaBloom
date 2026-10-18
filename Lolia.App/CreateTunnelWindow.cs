@@ -12,7 +12,8 @@ public partial class CreateTunnelWindow:ChromeWindow {
   InitializeComponent();api=client;options=choices;
   region.ItemsSource=new[]{"全部地区"}.Concat(options.Select(n=>n.Region).Where(r=>!string.IsNullOrWhiteSpace(r)).Distinct().OrderBy(r=>r)).ToList();region.SelectedIndex=0;
   search.TextChanged+=(_,_)=>Filter();region.SelectionChanged+=(_,_)=>Filter();onlineOnly.Checked+=(_,_)=>Filter();onlineOnly.Unchecked+=(_,_)=>Filter();
-  protocol.SelectionChanged+=(_,_)=>{Update();Filter();};
+  nodeProtocol.SelectionChanged+=(_,_)=>{if(protocol.SelectedIndex!=nodeProtocol.SelectedIndex)protocol.SelectedIndex=nodeProtocol.SelectedIndex;};
+  protocol.SelectionChanged+=(_,_)=>{nodeProtocol.SelectedIndex=protocol.SelectedIndex;Update();Filter();};
   NodeList.SelectionChanged+=(_,_)=>SelectionInfo.Text=NodeList.SelectedItem is NodeChoice n?$"已选择  {n.Name} · {n.Node.Region}":"请选择一个节点";
   create.Click+=async(_,_)=>await Create();Update();Filter();
  }
