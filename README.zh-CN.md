@@ -44,11 +44,18 @@
 
 ### Windows x64
 
-1. 打开上方的 [GitHub Releases 下载页](https://github.com/kkbbzjh/LoliaBloom/releases/latest)，下载 `LoliaBloom-win-x64.exe`。
-2. 双击运行即可使用；这是自包含单文件版，不需要单独安装 .NET。也可以下载 `LoliaBloom-win-x64.zip`，解压后运行其中的 `LoliaBloom.exe`。
-3. 首次需要后台常驻时，在软件里点击“一键安装后台服务”，按 Windows 提示授权管理员权限。之后关闭主窗口，后台服务仍可运行隧道。
+#### 单文件版（推荐）
+
+1. 打开 [GitHub Releases 下载页](https://github.com/kkbbzjh/LoliaBloom/releases/latest)，下载 `LoliaBloom-win-x64.exe`。
+2. 双击运行即可，不需要单独安装 .NET。
+
+#### ZIP 版
 
 也可以下载 `LoliaBloom-win-x64.zip`，解压后运行其中的 `LoliaBloom.exe`。
+
+#### 安装后台服务
+
+需要关闭主窗口后继续运行隧道时，在软件里点击“一键安装后台服务”，按 Windows 提示授权管理员权限。
 
 ### Linux / NAS（Docker Compose）
 
