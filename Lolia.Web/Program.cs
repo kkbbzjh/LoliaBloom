@@ -9,7 +9,6 @@ using System.Text;
 using System.Text.Json;
 using System.Formats.Tar;
 using Lolia.Shared;
-using Lolia.Service;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Antiforgery;
