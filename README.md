@@ -4,9 +4,9 @@ A pink-themed Windows desktop client for managing Lolia FRP tunnels.
 
 [English](README.md) | [简体中文](README.zh-CN.md)
 
-![Lolia Bloom — Windows interface](https://github.com/kkbbzjh/LoliaBloom/releases/download/v0.6.0/LoliaBloom-screenshot.png)
+![Lolia Bloom — Windows interface — example tunnels](https://github.com/kkbbzjh/LoliaBloom/releases/download/v0.6.1/LoliaBloom-screenshot.png)
 
-![Create tunnel — example nodes](https://github.com/kkbbzjh/LoliaBloom/releases/download/v0.6.0/LoliaBloom-create.png)
+![Create tunnel — example nodes](https://github.com/kkbbzjh/LoliaBloom/releases/download/v0.6.1/LoliaBloom-create.png)
 
 ## Features
 
@@ -23,7 +23,7 @@ A pink-themed Windows desktop client for managing Lolia FRP tunnels.
 - **Tunnel details** — view protocol, node, local and remote addresses, and connection status.
 - **Background service** — keep tunnel processes running after closing the window.
 - **One-click service installation** — install or remove the Windows Service from the app with administrator approval.
-- **Start with Windows** — choose which tunnels start automatically with the service.
+- **Start with Windows** — independent capsule switches for each tunnel; settings survive cloud sync and service restarts, with retries when the initial connection fails.
 - **Single EXE for Windows x64** — run one file; the included runtime is prepared automatically. A ZIP alternative is also available.
 
 [Download Windows x64](https://github.com/kkbbzjh/LoliaBloom/releases/latest)

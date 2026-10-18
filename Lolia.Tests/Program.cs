@@ -2,6 +2,20 @@ using System.Net;
 using System.Text;
 using Lolia.Shared;
 void Assert(bool b,string msg){if(!b)throw new Exception(msg);}
+var bootTime=DateTimeOffset.UtcNow;
+var bootEnabled=new HashSet<string>{"a","b"};var bootRunning=new HashSet<string>();var bootAttempts=new List<string>();
+var boot=new StartupConnections(new[]{"a","b"});
+void TickBoot(int seconds)=>boot.Tick(bootTime.AddSeconds(seconds),bootEnabled.Contains,bootRunning.Contains,id=>bootAttempts.Add(id));
+TickBoot(0);Assert(bootAttempts.SequenceEqual(new[]{"a","b"}),"boot starts only enabled IDs");
+TickBoot(5);Assert(bootAttempts.Count==2,"retry backoff");
+boot.Cancel("b");TickBoot(30);Assert(bootAttempts.SequenceEqual(new[]{"a","b","a"}),"manual stop cancels only its own retry");
+bootRunning.Add("a");TickBoot(35);TickBoot(45);bootRunning.Clear();TickBoot(80);Assert(bootAttempts.Count==3,"stable startup completes without restarting manual stops");
+var disabled=new StartupConnections(new[]{"a"});bootEnabled.Remove("a");disabled.Tick(bootTime,bootEnabled.Contains,_=>false,id=>throw new Exception("disabled tunnel started"));
+bootEnabled.Add("a");disabled.Tick(bootTime.AddMinutes(1),bootEnabled.Contains,_=>false,id=>throw new Exception("later toggle must apply next startup"));
+var transient=new StartupConnections(new[]{"a"});int transientAttempts=0;
+transient.Tick(bootTime,_=>true,_=>false,_=>{transientAttempts++;throw new IOException("network not ready");});
+transient.Tick(bootTime.AddSeconds(30),_=>true,_=>false,_=>transientAttempts++);Assert(transientAttempts==2,"startup errors retry without crashing host");
+Console.WriteLine("PASS: independent startup policy, retry delay, manual stop, stable completion and next-boot semantics");
 var seen=new List<string>();
 var handler=new Fake(async r=>{
  Assert(r.Headers.Authorization?.ToString()=="Bearer test-token","Bearer authorization");var path=r.RequestUri!.PathAndQuery;seen.Add(path);

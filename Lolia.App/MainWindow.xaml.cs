@@ -27,6 +27,8 @@ public partial class MainWindow:ChromeWindow {
  readonly Dictionary<string,CloudTunnel> cloud=new();
  LoliaApi api=null!;
  bool refreshing,signingIn;
+ readonly HashSet<string> autoPending=new();
+ string? notice;DateTimeOffset noticeUntil;
  public MainWindow(){
   InitializeComponent();api=new LoliaApi(http,GetAccessToken);
   Loaded+=async(_,_)=>{if(session!=null)await Safe(Sync);else await Refresh();poller.Tick+=async(_,_)=>await Refresh();poller.Start();};Closed+=(_,_)=>poller.Stop();
@@ -69,11 +71,11 @@ public partial class MainWindow:ChromeWindow {
   }finally{pipeGate.Release();}
  }
  async Task Refresh(){
-  if(refreshing||installingService)return;refreshing=true;
+  if(refreshing||installingService||autoPending.Count>0)return;refreshing=true;
   try{
    List<TunnelRow> list;
    string serviceStatus;
-   try{var r=await Send(new("list"));if(!r.Ok)throw new Exception(r.Message);list=JsonSerializer.Deserialize<List<TunnelRow>>(r.Data!,Paths.Json)??new();serviceStatus=r.Message=="OK:2"?"后台服务已连接":"后台服务需要升级，点击上方按钮后才能启用本地速率";}
+   try{var r=await Send(new("list"));if(!r.Ok)throw new Exception(r.Message);list=JsonSerializer.Deserialize<List<TunnelRow>>(r.Data!,Paths.Json)??new();serviceStatus=r.Message=="OK:3"?"后台服务已连接":"后台服务需要升级，点击上方按钮更新开机连接和本地速率";}
    catch(Exception serviceError){list=cloud.Values.Select(t=>new TunnelRow{Id=t.Id,Name=t.Label,Type=t.Type,Node=t.Node,LocalAddress=t.LocalAddress,RemoteAddress=t.RemoteAddress,Description=t.Remark}).ToList();serviceStatus=serviceError.Message;}
    foreach(var t in list){if(cloudTotals.TryGetValue(t.Id,out var total)){t.TotalBytesIn=total.In;t.TotalBytesOut=total.Out;}}
    if(session!=null&&!cloudRefreshing&&DateTimeOffset.UtcNow>=nextCloudPoll)_=RefreshCloudData();
@@ -85,15 +87,16 @@ public partial class MainWindow:ChromeWindow {
     if(!ready&&!GuideTitle.Text.StartsWith("安装未完成",StringComparison.Ordinal)){
      var state=ServiceState();
      GuideTitle.Text=state=="尚未安装后台服务"?"第一次使用：请先安装后台服务":"后台服务需要更新或修复";
-     GuideDescription.Text=state=="尚未安装后台服务"?"点击上方紫色按钮，在 Windows 提示时选择“是”。安装完成后，就可以启动隧道了。":state=="running"?"点击上方按钮更新服务，完成后即可使用本地实时速率。":"点击上方按钮启动或修复后台服务，完成后即可启动隧道。";
+     GuideDescription.Text=state=="尚未安装后台服务"?"点击上方紫色按钮，在 Windows 提示时选择“是”。安装完成后，就可以启动隧道了。":state=="running"?"点击上方按钮更新服务，完成后即可使用新版开机连接和本地实时速率。":"点击上方按钮启动或修复后台服务，完成后即可启动隧道。";
     }
    }
+   if(autoPending.Count>0)return;
    var selected=(TunnelGrid.SelectedItem as TunnelRow)?.Id;TunnelGrid.ItemsSource=list;TunnelGrid.SelectedItem=list.FirstOrDefault(t=>t.Id==selected);
    GlobalDownload.Text=list.Any(t=>t.DownloadBytesPerSecond!=null)?TunnelRow.Format(list.Sum(t=>t.DownloadBytesPerSecond??0),true):"—";
    GlobalUpload.Text=list.Any(t=>t.UploadBytesPerSecond!=null)?TunnelRow.Format(list.Sum(t=>t.UploadBytesPerSecond??0),true):"—";
    RunningCount.Text=$"{list.Count(t=>t.Running)} / {list.Count}";
    EmptyState.Visibility=list.Count==0?Visibility.Visible:Visibility.Collapsed;
-   Status.Text=serviceStatus+$" · {DateTime.Now:HH:mm:ss}";
+   Status.Text=DateTimeOffset.UtcNow<noticeUntil?notice:serviceStatus+$" · {DateTime.Now:HH:mm:ss}";
   }catch(Exception e){Status.Text=e.Message;}finally{refreshing=false;}
  }
  async Task RefreshCloudData(){
@@ -140,7 +143,7 @@ public partial class MainWindow:ChromeWindow {
    var dialog=new CreateTunnelWindow(api,nodes){Owner=this};dialog.ContentRendered+=(_,_)=>dialog.Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.ApplicationIdle,new System.Action(()=>{Capture(dialog,args[createIndex+1]);System.Windows.Application.Current.Shutdown();}));dialog.Show();return;
   }
   var index=Array.IndexOf(args,"--screenshot");if(index<0||index+1>=args.Length)return;
-  Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.ApplicationIdle,new System.Action(()=>{Capture(this,args[index+1]);System.Windows.Application.Current.Shutdown();}));
+  Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.ApplicationIdle,new System.Action(()=>{poller.Stop();TunnelGrid.ItemsSource=new[]{new TunnelRow{Id="example-a",Name="远程桌面（示例）",Type="TCP",Node="香港",LocalAddress="127.0.0.1:3389",RemoteAddress="demo.example:20001",AutoStart=true},new TunnelRow{Id="example-b",Name="网站预览（示例）",Type="HTTPS",Node="广州",LocalAddress="127.0.0.1:8080",RemoteAddress="https://demo.example",AutoStart=false}};EmptyState.Visibility=Visibility.Collapsed;Status.Text="示例隧道 · 开机连接可逐条设置，粉色开启，灰色关闭";Capture(this,args[index+1]);System.Windows.Application.Current.Shutdown();}));
  }
  static void Capture(Window window,string path){
   window.UpdateLayout();var bitmap=new System.Windows.Media.Imaging.RenderTargetBitmap((int)window.ActualWidth,(int)window.ActualHeight,96,96,System.Windows.Media.PixelFormats.Pbgra32);bitmap.Render(window);var encoder=new System.Windows.Media.Imaging.PngBitmapEncoder();encoder.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(bitmap));using var output=File.Create(path);encoder.Save(output);
@@ -159,7 +162,19 @@ public partial class MainWindow:ChromeWindow {
  async Task Action(string action,string? value=null){var t=Selected();var r=await Send(new(action,t.Id,value));if(!r.Ok)throw new Exception(r.Message);await Refresh();}
  async void Start_Click(object s,RoutedEventArgs e)=>await Safe(()=>Action("start"));
  async void Stop_Click(object s,RoutedEventArgs e)=>await Safe(()=>Action("stop"));
- async void Auto_Click(object s,RoutedEventArgs e)=>await Safe(()=>Action("auto",(!Selected().AutoStart).ToString().ToLowerInvariant()));
+ async void AutoToggle_Click(object s,RoutedEventArgs e){
+  if(s is not System.Windows.Controls.Primitives.ToggleButton toggle||toggle.Tag is not string id||toggle.DataContext is not TunnelRow row)return;
+  var desired=toggle.IsChecked==true;
+  if(!autoPending.Add(id)){toggle.IsChecked=row.AutoStart;return;}
+  toggle.IsEnabled=false;
+  try{
+   var reply=await Send(new("auto",id,desired?"true":"false"));
+   if(!reply.Ok)throw new Exception(reply.Message);
+   row.AutoStart=reply.Data is "true" or "false"?reply.Data=="true":desired;
+   notice=row.Name+"："+reply.Message;
+  }catch(Exception ex){toggle.IsChecked=row.AutoStart;notice="未保存，开关已恢复："+ex.Message;}
+  finally{noticeUntil=DateTimeOffset.UtcNow.AddSeconds(8);Status.Text=notice;autoPending.Remove(id);toggle.IsEnabled=true;await Refresh();}
+ }
  async void UpdateFrp_Click(object s,RoutedEventArgs e)=>await Safe(async()=>{
   if(installingService)return;installingService=true;poller.Stop();
   try{
@@ -220,6 +235,7 @@ public partial class MainWindow:ChromeWindow {
  public long? TotalBytesIn{get;set;}public long? TotalBytesOut{get;set;}public double? DownloadBytesPerSecond{get;set;}public double? UploadBytesPerSecond{get;set;}public string? MetricsSource{get;set;}public long? LocalBytesIn{get;set;}public long? LocalBytesOut{get;set;}
  public System.Windows.Media.Brush StateBrush=>Running?System.Windows.Media.Brushes.MediumSeaGreen:System.Windows.Media.Brushes.IndianRed;
  public System.Windows.Media.Brush ActionBrush=>Running?new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(144,121,145)):new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(219,67,133));
+ public string AutoText=>AutoStart?"已开启":"已关闭";
  public string StateText=>Running?"运行中":"已停止";public string ToggleText=>Running?"停止":"启动";
  public static string Format(double? n,bool rate=false){if(n is null)return "—";var v=n.Value;string[] u={"B","KB","MB","GB","TB"};int i=0;while(v>=1024&&i<u.Length-1){v/=1024;i++;}return $"{v:0.##} {u[i]}"+(rate?"/s":"");}
  public string DownloadText=>Format(DownloadBytesPerSecond,true);public string UploadText=>Format(UploadBytesPerSecond,true);

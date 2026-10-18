@@ -70,20 +70,31 @@ jobs:
               } finally { $pipe.Dispose() }
             }
             Invoke-ServiceCommand @{action='list'}
-            $tunnels = @(@{id='99999999';name='CI contract test';credential='ci-only-credential';autoStart=$false}) | ConvertTo-Json -AsArray -Compress
+            $tunnels = @(@{id='99999999';name='CI contract test A';credential='ci-only-credential';autoStart=$false},@{id='99999998';name='CI contract test B';credential='ci-only-credential-b';autoStart=$false}) | ConvertTo-Json -AsArray -Compress
             Invoke-ServiceCommand @{action='sync';value=$tunnels}
             $saved = [IO.File]::ReadAllBytes("$env:ProgramData/LoliaBloom/tunnels.json")
             if ([Text.Encoding]::UTF8.GetString($saved).Contains('ci-only-credential')) { throw 'Credential was saved without encryption' }
+            Invoke-ServiceCommand @{action='auto';id='99999999';value='true'}
+            Invoke-ServiceCommand @{action='auto';id='99999998';value='false'}
+            Invoke-ServiceCommand @{action='sync';value=$tunnels}
+            $before = (Invoke-ServiceCommand @{action='list'}).data | ConvertFrom-Json
+            if (-not ($before | Where-Object id -eq '99999999').autoStart -or ($before | Where-Object id -eq '99999998').autoStart) { throw 'Independent switches or sync preservation failed' }
             Stop-Service LoliaBloomService
+            Move-Item $engine "$engine.ci-disabled"
             Start-Service LoliaBloomService
             (Get-Service LoliaBloomService).WaitForStatus('Running', [TimeSpan]::FromSeconds(30))
             $reply = Invoke-ServiceCommand @{action='list'}
             if ($reply.data.Contains('ci-only-credential')) { throw 'Credential leaked through list IPC' }
             $items = $reply.data | ConvertFrom-Json
-            if (@($items).Count -ne 1 -or $items[0].id -ne '99999999') { throw 'Encrypted service persistence failed' }
+            if (@($items).Count -ne 2 -or -not ($items | Where-Object id -eq '99999999').autoStart -or ($items | Where-Object id -eq '99999998').autoStart) { throw 'Independent startup settings did not survive service restart' }
+            Invoke-ServiceCommand @{action='auto';id='99999999';value='false'}
+            $off = (Invoke-ServiceCommand @{action='list'}).data | ConvertFrom-Json
+            if (@($off | Where-Object autoStart).Count -ne 0) { throw 'Switch off was not persisted' }
+            Write-Host 'PASS: per-tunnel switches, sync preservation, encrypted restart persistence and switch off'
             Invoke-ServiceCommand @{action='sync';value='[]'}
           } finally {
             Stop-Service LoliaBloomService -ErrorAction SilentlyContinue
+            if (Test-Path "$engine.ci-disabled") { Move-Item "$engine.ci-disabled" $engine -Force }
             sc.exe delete LoliaBloomService
           }
           $app = Start-Process (Join-Path $PWD 'dist/Lolia.App.exe') -ArgumentList '--screenshot', (Join-Path $PWD 'LoliaBloom-screenshot.png') -PassThru
@@ -109,12 +120,12 @@ jobs:
             LoliaBloom-screenshot.png
             LoliaBloom-create.png
           if-no-files-found: error
-      - name: Publish v0.6.0
+      - name: Publish v0.6.1
         env:
           GH_TOKEN: ${{ github.token }}
         shell: pwsh
         run: |
-          gh release view v0.6.0 *> $null
-          if ($LASTEXITCODE -eq 0) { throw 'v0.6.0 already exists; refusing to replace it.' }
-          gh release create v0.6.0 LoliaBloom-win-x64.exe LoliaBloom-win-x64.zip LoliaBloom-screenshot.png LoliaBloom-create.png --target '${{ github.sha }}' --title '洛链绽放 · Lolia Bloom v0.6.0' --notes 'Redesigned pink-and-plum workspace, custom title bar, searchable node cards with region/online/protocol filtering, one-click access address copying and official website check-in. Adds per-process local FRP network rates using Windows ETW; excludes loopback/backend traffic and retains separate platform totals. Includes single EXE and verified FRP updates.'
+          gh release view v0.6.1 *> $null
+          if ($LASTEXITCODE -eq 0) { throw 'v0.6.1 already exists; refusing to replace it.' }
+          gh release create v0.6.1 LoliaBloom-win-x64.exe LoliaBloom-win-x64.zip LoliaBloom-screenshot.png LoliaBloom-create.png --target '${{ github.sha }}' --title '洛链绽放 · Lolia Bloom v0.6.1' --notes 'Adds independent per-tunnel startup capsule switches with explicit saved state and rollback on save failure. Preserves settings across cloud synchronization and service restarts. Retries initial startup when the network is unavailable; manual stop cancels pending retries. Includes verified Windows service persistence tests, single EXE packaging and FRP updates.'
           if ($LASTEXITCODE) { exit $LASTEXITCODE }

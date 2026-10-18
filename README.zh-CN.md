@@ -4,9 +4,9 @@
 
 [English](README.md) | [简体中文](README.zh-CN.md)
 
-![Lolia Bloom Windows 实际界面](https://github.com/kkbbzjh/LoliaBloom/releases/download/v0.6.0/LoliaBloom-screenshot.png)
+![Lolia Bloom Windows 界面（示例隧道）](https://github.com/kkbbzjh/LoliaBloom/releases/download/v0.6.1/LoliaBloom-screenshot.png)
 
-![创建隧道界面（示例节点）](https://github.com/kkbbzjh/LoliaBloom/releases/download/v0.6.0/LoliaBloom-create.png)
+![创建隧道界面（示例节点）](https://github.com/kkbbzjh/LoliaBloom/releases/download/v0.6.1/LoliaBloom-create.png)
 
 ## 功能特色
 
@@ -23,7 +23,7 @@
 - **隧道详情**：查看协议、节点、本地地址、远程地址和连接状态。
 - **独立后台服务**：关闭程序窗口后，隧道进程仍可继续运行。
 - **一键安装服务**：在程序内申请管理员权限，安装或卸载 Windows Service。
-- **开机自动连接**：为每条隧道设置是否随后台服务自动启动。
+- **开机自动连接**：每条隧道独立胶囊开关，同步和重启后保留设置；开机网络未就绪时重试，手动停止后取消本轮重试。
 - **Windows x64 单文件版**：双击一个 EXE，自动准备运行环境；同时提供 ZIP 版。
 
 [下载 Windows x64 绿色版](https://github.com/kkbbzjh/LoliaBloom/releases/latest)
