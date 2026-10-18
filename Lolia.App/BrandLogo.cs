@@ -5,7 +5,7 @@ using System.Windows.Media.Imaging;
 namespace Lolia.App;
 
 // Decode once into an owned, premultiplied pixel buffer instead of retaining
-// a lazily decoded PNG surface in the custom title bar.
+// a lazily decoded image surface in the custom title bar.
 public sealed class BrandLogo : Image {
  static readonly BitmapSource Logo=LoadLogo();
  public BrandLogo(){
@@ -13,7 +13,7 @@ public sealed class BrandLogo : Image {
   RenderOptions.SetBitmapScalingMode(this,BitmapScalingMode.HighQuality);
  }
  static BitmapSource LoadLogo(){
-  var resource=Application.GetResourceStream(new Uri("pack://application:,,,/Lolia.App;component/Assets/logo.png"))
+  var resource=Application.GetResourceStream(new Uri("pack://application:,,,/Lolia.App;component/Assets/logo.bmp"))
    ??throw new InvalidOperationException("Embedded logo is missing.");
   using var stream=resource.Stream;
   var decoder=BitmapDecoder.Create(stream,BitmapCreateOptions.PreservePixelFormat,BitmapCacheOption.OnLoad);

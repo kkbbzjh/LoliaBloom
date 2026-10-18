@@ -125,12 +125,12 @@ jobs:
             LoliaBloom-create.png
             LoliaBloom-details.png
           if-no-files-found: error
-      - name: Publish v0.7.3
+      - name: Publish v0.7.4
         env:
           GH_TOKEN: ${{ github.token }}
         shell: pwsh
         run: |
-          gh release view v0.7.3 *> $null
-          if ($LASTEXITCODE -eq 0) { Write-Host 'v0.7.3 already exists; skipping the duplicate release.'; exit 0 }
-          gh release create v0.7.3 LoliaBloom-win-x64.exe LoliaBloom-win-x64.zip LoliaBloom-screenshot.png LoliaBloom-create.png LoliaBloom-details.png --target '${{ github.sha }}' --title '洛链绽放 · Lolia Bloom v0.7.3' --notes 'Fixes title-bar logo rendering by eagerly decoding the embedded logo into a frozen premultiplied pixel buffer with high-quality scaling. Applies to the main, tunnel creation and details windows.'
+          gh release view v0.7.4 *> $null
+          if ($LASTEXITCODE -eq 0) { Write-Host 'v0.7.4 already exists; skipping the duplicate release.'; exit 0 }
+          gh release create v0.7.4 LoliaBloom-win-x64.exe LoliaBloom-win-x64.zip LoliaBloom-screenshot.png LoliaBloom-create.png LoliaBloom-details.png --target '${{ github.sha }}' --title '洛链绽放 · Lolia Bloom v0.7.4' --notes 'Fixes title-bar logo rendering by using a normalized bitmap resource and eagerly decoding the embedded logo into a frozen premultiplied pixel buffer with high-quality scaling. Applies to the main, tunnel creation and details windows.'
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
