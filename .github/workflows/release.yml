@@ -38,7 +38,9 @@ jobs:
           Copy-Item $frpc.FullName dist/frpc.exe
           dotnet run --project Lolia.Tests/Lolia.Tests.csproj -c Release -- --engine-test frpc-upstream.zip dist/frpc.exe
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
-          Copy-Item install-service.ps1,install-service.cmd,uninstall-service.cmd,README.md,README.zh-CN.md,THIRD-PARTY-NOTICES.md dist/
+          Copy-Item install-service.ps1,install-service.cmd,uninstall-service.cmd,README.md,README.zh-CN.md,LICENSE,THIRD-PARTY-NOTICES.md dist/
+          if (-not (Test-Path dist/LICENSE)) { throw 'Project license missing from distribution' }
+          Copy-Item docs dist/docs -Recurse
           Copy-Item licenses dist/licenses -Recurse
       - name: Verify service installation and IPC
         shell: pwsh

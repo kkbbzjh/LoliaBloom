@@ -39,3 +39,13 @@ Screenshots are rendered by the Windows client using example tunnels and traffic
 [Download Windows x64](https://github.com/kkbbzjh/LoliaBloom/releases/latest)
 
 Lolia Bloom is an unofficial community client, not affiliated with Lolia FRP.
+
+## License and commercial authorization
+
+[![License: Noncommercial](https://img.shields.io/badge/License-Noncommercial-D74787)](LICENSE)
+
+Lolia Bloom's original code and assets are source-available under the [Lolia Bloom Noncommercial License 1.0](LICENSE). Noncommercial use, modification and distribution are permitted under its terms. **All commercial purposes, including internal business use, require prior separate written authorization from the copyright holder.** Free access to the program does not grant commercial rights. This is not an OSI-approved open-source license.
+
+For commercial authorization, [contact kkbbzjh through a GitHub issue](https://github.com/kkbbzjh/LoliaBloom/issues/new?title=Commercial%20authorization%20request). Keep credentials and confidential information out of public requests. The English LICENSE text governs; this paragraph is a summary.
+
+Third-party components retain their own licenses. In particular, the bundled FRP engine remains under Apache License 2.0; see [third-party notices](THIRD-PARTY-NOTICES.md).

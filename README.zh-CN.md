@@ -39,3 +39,13 @@
 [下载 Windows x64 绿色版](https://github.com/kkbbzjh/LoliaBloom/releases/latest)
 
 本项目为社区第三方客户端，与 洛链映射官方无隶属关系。
+
+## 许可证与商业授权
+
+[![许可：非商业使用](https://img.shields.io/badge/License-Noncommercial-D74787)](LICENSE)
+
+洛链绽放的原创代码和资源采用 [Lolia Bloom Noncommercial License 1.0](LICENSE)，允许遵循条款的非商业使用、修改和分发。**所有商业用途，包括企业内部业务使用，均须事先取得版权方单独的书面授权。** 免费下载不代表可以免费商用。本项目属于源码公开、非商业许可，不属于 OSI 定义的开源软件。
+
+商业授权请[通过 GitHub Issue 联系 kkbbzjh](https://github.com/kkbbzjh/LoliaBloom/issues/new?title=Commercial%20authorization%20request)，公开请求中请勿提交账号凭据或商业机密。正式条款以英文 LICENSE 为准，本段仅作说明。
+
+第三方组件继续遵循各自许可证，内置 FRP 引擎仍采用 Apache License 2.0，详见[第三方声明](THIRD-PARTY-NOTICES.md)。

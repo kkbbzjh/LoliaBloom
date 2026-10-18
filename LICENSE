@@ -1,0 +1,79 @@
+Lolia Bloom Noncommercial License 1.0
+
+Copyright (c) 2026 kkbbzjh
+
+1. Scope and acceptance
+
+This license applies to the original Lolia Bloom software, source code,
+documentation and assets made available under this license (the "Software"),
+to the extent the copyright holder has the right to license them. By exercising
+rights granted by this license, you accept its terms.
+
+Separately identified third-party components are excluded and remain governed
+by their own licenses. This license does not restrict rights you independently
+hold under those licenses or applicable law.
+
+2. Noncommercial permission
+
+Subject to these terms, you may use, study, copy, modify and distribute the
+Software and your modifications solely for noncommercial purposes, without a
+license fee. You must preserve this license, copyright notices and applicable
+third-party notices in copies and distributions. Modified versions must clearly
+identify that they have been modified and must not be presented as official
+Lolia Bloom releases.
+
+This permission does not require you to publish private modifications.
+Recipients receive rights directly under this license; you may not grant rights
+to the Software broader than those granted here.
+
+3. Commercial purposes require separate written authorization
+
+Any commercial purpose requires prior, separate written authorization from
+kkbbzjh, or another copyright holder authorized to license the relevant rights.
+Downloading the Software, the public availability of its source code, or the
+absence of a fee does not constitute commercial authorization.
+
+A commercial purpose is a purpose primarily intended for or directed toward
+commercial advantage, business operations, monetary compensation or revenue
+generation. This includes:
+- selling, licensing, renting or charging for access to the Software or
+  modified versions;
+- using the Software in business operations, professional work, paid services,
+  or revenue-generating services, including internal business use;
+- bundling or integrating the Software into commercial products or services.
+
+A commercial activity remains commercial even when the Software itself is
+provided free of charge. Nonprofit, educational, charitable and government
+organizations have no blanket exemption: their noncommercial activities are
+permitted under section 2, and their commercial activities require authorization.
+
+Commercial authorization may specify its own scope, fees and conditions.
+Request it through https://github.com/kkbbzjh/LoliaBloom/issues or another contact
+channel explicitly designated by the copyright holder. Do not include passwords,
+tokens or other confidential information in public requests.
+
+4. Third-party software and names
+
+This license does not relicense third-party software, including the bundled
+FRP engine. See THIRD-PARTY-NOTICES.md and the licenses directory.
+No trademark rights or permission to imply endorsement or affiliation are
+granted by this license.
+
+5. Termination
+
+The permissions granted by this license terminate if you breach its terms.
+Termination does not affect rights independently available under applicable
+law or a third-party license. Any reinstatement must be authorized in writing
+by the relevant copyright holder.
+
+6. Disclaimer
+
+TO THE EXTENT PERMITTED BY APPLICABLE LAW, THE SOFTWARE IS PROVIDED "AS IS",
+WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+TO THE EXTENT PERMITTED BY APPLICABLE LAW, THE COPYRIGHT HOLDERS SHALL NOT BE
+LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY ARISING FROM THE SOFTWARE
+OR ITS USE.
+
+This is a source-available, noncommercial license, not an OSI-approved
+open-source license. It is a project-specific license, not the PolyForm license.
