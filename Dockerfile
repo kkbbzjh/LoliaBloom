@@ -9,7 +9,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
     esac && \
     curl --fail --location --retry 3 "https://github.com/Lolia-FRP/lolia-frp/releases/download/${FRP_VERSION}/${asset}" -o /tmp/frp.tar.gz && \
     echo "$digest  /tmp/frp.tar.gz" | sha256sum --check && \
-    entry="$(tar -tzf /tmp/frp.tar.gz | awk '$NF == "frpc" {print; exit}')" && test -n "$entry" && \
+    entry="$(tar -tzf /tmp/frp.tar.gz | awk -F/ '$NF == "frpc" {print; exit}')" && test -n "$entry" && \
     tar -xOf /tmp/frp.tar.gz "$entry" > /frpc && chmod 755 /frpc && /frpc --version
 
 FROM --platform=$BUILDPLATFORM mcr.microsoft.com/dotnet/sdk:10.0 AS build
