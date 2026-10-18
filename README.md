@@ -40,9 +40,17 @@ Screenshots are rendered by the Windows client using example tunnels and traffic
 
 [Download Windows x64](https://github.com/kkbbzjh/LoliaBloom/releases/latest)
 
-### Docker deployment
+## Installation
 
-Use a Linux host or NAS with Docker Compose. Replace `192.168.1.20` with its LAN address. On the first publication, open [GHCR package settings](https://github.com/users/kkbbzjh/packages/container/package/loliabloom) and set visibility to **Public** so Docker can pull the image without signing in.
+### Windows x64
+
+1. Open the [GitHub Releases download page](https://github.com/kkbbzjh/LoliaBloom/releases/latest) and download `LoliaBloom-win-x64.exe`.
+2. Double-click the file to run. It is a self-contained single-file build and does not need a separate .NET installation. Alternatively, download `LoliaBloom-win-x64.zip`, extract it, and run `LoliaBloom.exe`.
+3. To keep tunnels running after closing the window, choose **Install background service** in the app and approve the Windows administrator prompt.
+
+### Linux / NAS (Docker Compose)
+
+Use a Linux host or NAS with Docker Engine and Docker Compose v2. Replace `192.168.1.20` below with its LAN address. After the first image is published, open [GHCR package settings](https://github.com/users/kkbbzjh/packages/container/package/loliabloom) and set visibility to **Public** so Docker can pull anonymously.
 
 ```bash
 mkdir -p ~/loliabloom && cd ~/loliabloom
@@ -52,7 +60,7 @@ cp .env.example .env
 openssl rand -base64 32
 ```
 
-Put the generated random value in `.env` as `LOLIABLOOM_ADMIN_PASSWORD`, set `LOLIABLOOM_PUBLIC_URL=http://192.168.1.20:8080`, then run:
+Put the generated random value in `.env` as `LOLIABLOOM_ADMIN_PASSWORD`, set `LOLIABLOOM_PUBLIC_URL=http://192.168.1.20:8080`, save the file, then run:
 
 ```bash
 docker compose pull
@@ -61,9 +69,11 @@ docker compose up -d
 
 Open `http://192.168.1.20:8080` and enter the admin password. For internet access, configure an HTTPS reverse proxy and set `LOLIABLOOM_PUBLIC_URL` to its HTTPS address.
 
+Stop the service with `docker compose down`. Update to the latest image with `docker compose pull && docker compose up -d`. Tunnel and login data remain in the `loliabloom-data` named volume when the container is removed.
+
 Cloud authorization requires the OAuth app to allow the exact callback `{LOLIABLOOM_PUBLIC_URL}/auth/callback`. If the default public Client ID does not allow that address, authorization will be rejected; configure a Client ID with that callback registered in `LOLIA_OAUTH_CLIENT_ID`. `LOLIABLOOM_OAUTH_REDIRECT_URL` can override the full callback URL.
 
-For maintenance, use `docker compose logs -f` to view logs, `docker compose pull && docker compose up -d` to update, and `docker compose down` to stop. Tunnel and login data persist in the `loliabloom-data` Docker volume.
+View logs with `docker compose logs -f`.
 
 Lolia Bloom is an unofficial community client, not affiliated with Lolia FRP.
 

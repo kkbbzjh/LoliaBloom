@@ -40,9 +40,17 @@
 
 [下载 Windows x64 绿色版](https://github.com/kkbbzjh/LoliaBloom/releases/latest)
 
-### Docker 部署
+## 安装
 
-准备一台装有 Docker Compose 的 Linux 主机或 NAS。将 `192.168.1.20` 换成该主机的局域网地址。首次使用请先打开 [GHCR 镜像包设置](https://github.com/users/kkbbzjh/packages/container/package/loliabloom)，将可见性设为 **Public**，之后无需登录即可拉取镜像。
+### Windows x64
+
+1. 打开上方的 [GitHub Releases 下载页](https://github.com/kkbbzjh/LoliaBloom/releases/latest)，下载 `LoliaBloom-win-x64.exe`。
+2. 双击运行即可使用；这是自包含单文件版，不需要单独安装 .NET。也可以下载 `LoliaBloom-win-x64.zip`，解压后运行其中的 `LoliaBloom.exe`。
+3. 首次需要后台常驻时，在软件里点击“一键安装后台服务”，按 Windows 提示授权管理员权限。之后关闭主窗口，后台服务仍可运行隧道。
+
+### Linux / NAS（Docker Compose）
+
+准备一台已安装 Docker Engine 和 Docker Compose v2 的 Linux 主机或 NAS。将下方的 `192.168.1.20` 换成主机的局域网地址。首次发布镜像后，请打开 [GHCR 镜像包设置](https://github.com/users/kkbbzjh/packages/container/package/loliabloom)，将可见性设为 **Public**，之后即可匿名拉取。
 
 ```bash
 mkdir -p ~/loliabloom && cd ~/loliabloom
@@ -52,7 +60,7 @@ cp .env.example .env
 openssl rand -base64 32
 ```
 
-把 `openssl` 生成的随机值填入 `.env` 的 `LOLIABLOOM_ADMIN_PASSWORD`，再设置 `LOLIABLOOM_PUBLIC_URL=http://192.168.1.20:8080`，启动：
+把 `openssl` 生成的随机值填入 `.env` 的 `LOLIABLOOM_ADMIN_PASSWORD`，并设置 `LOLIABLOOM_PUBLIC_URL=http://192.168.1.20:8080`。保存 `.env` 后执行：
 
 ```bash
 docker compose pull
@@ -61,9 +69,11 @@ docker compose up -d
 
 浏览器打开 `http://192.168.1.20:8080`，输入管理员密码。需要通过互联网访问时，应先配置 HTTPS 反向代理，并将 `LOLIABLOOM_PUBLIC_URL` 改为 HTTPS 公网地址。
 
+停止服务使用 `docker compose down`；更新到最新镜像使用 `docker compose pull && docker compose up -d`。隧道和登录信息保存在 `loliabloom-data` 命名卷中，删除容器不会删除该卷。
+
 官网账号授权需要 OAuth 应用允许完整回调地址 `{LOLIABLOOM_PUBLIC_URL}/auth/callback`。默认官方 Client ID 若未登记此回调地址，授权服务会拒绝登录；请在 `.env` 中使用已登记该地址的 `LOLIA_OAUTH_CLIENT_ID`，并将相同的回调地址登记到该 OAuth 应用。`LOLIABLOOM_OAUTH_REDIRECT_URL` 可用于指定已登记的完整回调地址。
 
-常用维护命令：`docker compose logs -f` 查看日志，`docker compose pull && docker compose up -d` 更新洛链绽放，`docker compose down` 停止服务。隧道与登录凭据保存在 Docker 命名卷 `loliabloom-data` 中。
+查看运行日志：`docker compose logs -f`。
 
 本项目为社区第三方客户端，与 洛链映射官方无隶属关系。
 
