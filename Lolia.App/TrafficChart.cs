@@ -7,7 +7,7 @@ public sealed class TrafficChart:FrameworkElement {
  readonly List<(DateTimeOffset Time,double? Value)> samples=new();
  public Brush LineBrush{get;set;}=new SolidColorBrush(Color.FromRgb(207,83,143));
  public void Add(double? value){var now=DateTimeOffset.UtcNow;if(samples.Count>0&&now-samples[^1].Time<TimeSpan.FromMilliseconds(800))return;samples.Add((now,value is >=0&&double.IsFinite(value.Value)?value:null));samples.RemoveAll(s=>s.Time<now.AddSeconds(-60));InvalidateVisual();}
- public void Preview(){samples.Clear();var now=DateTimeOffset.UtcNow;for(int i=0;i<=60;i++)samples.Add((now.AddSeconds(i-60),Math.Max(0,120000+90000*Math.Sin(i*.19)+45000*Math.Cos(i*.51))));InvalidateVisual();}
+ public void Preview(double current=182400,double phase=0){samples.Clear();var now=DateTimeOffset.UtcNow;for(int i=0;i<=60;i++)samples.Add((now.AddSeconds(i-60),Math.Max(current*.05,current*(1+.55*(Math.Sin((i-60)*.19+phase)-Math.Sin(phase))+.20*(Math.Cos((i-60)*.51)-1)))));InvalidateVisual();}
  protected override void OnRender(DrawingContext dc){
   base.OnRender(dc);double w=ActualWidth,h=ActualHeight;if(w<30||h<30)return;
   var now=samples.Count>0?samples[^1].Time:DateTimeOffset.UtcNow;var valid=samples.Where(s=>s.Value!=null).ToArray();double max=Math.Max(1024,valid.Length>0?valid.Max(s=>s.Value!.Value)*1.15:1024);double bottom=h-17,top=5;
