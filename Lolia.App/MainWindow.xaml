@@ -2,7 +2,7 @@
 <Border BorderBrush="#EADDE8" BorderThickness="1" CornerRadius="16"><Grid>
 <Grid.RowDefinitions><RowDefinition Height="60"/><RowDefinition Height="*"/></Grid.RowDefinitions>
 <Border Background="#FFFCFE" BorderBrush="#EFE5ED" BorderThickness="0,0,0,1"><Grid Margin="20,0,12,0"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-<StackPanel Orientation="Horizontal" VerticalAlignment="Center"><Image Source="Assets/logo.png" Width="30" Height="30"/><TextBlock Text="洛链绽放" FontWeight="SemiBold" Margin="10,0,14,0" VerticalAlignment="Center"/><TextBlock Text="L O L I A   B L O O M" FontSize="10" Foreground="#B29AAC" VerticalAlignment="Center"/></StackPanel>
+<StackPanel Orientation="Horizontal" VerticalAlignment="Center"><local:BrandLogo Width="30" Height="30"/><TextBlock Text="洛链绽放" FontWeight="SemiBold" Margin="10,0,14,0" VerticalAlignment="Center"/><TextBlock Text="L O L I A   B L O O M" FontSize="10" Foreground="#B29AAC" VerticalAlignment="Center"/></StackPanel>
 <StackPanel Grid.Column="1" Orientation="Horizontal" shell:WindowChrome.IsHitTestVisibleInChrome="True"><Button Style="{StaticResource CaptionButton}" Content="─" Click="Minimize_Click" ToolTip="最小化"/><Button Style="{StaticResource CaptionButton}" Content="□" Click="Maximize_Click" ToolTip="最大化 / 还原"/><Button Style="{StaticResource CaptionButton}" Content="×" Click="Close_Click" ToolTip="关闭窗口，后台隧道继续运行"/></StackPanel>
 </Grid></Border>
 <Grid Grid.Row="1"><Grid.ColumnDefinitions><ColumnDefinition Width="210"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
