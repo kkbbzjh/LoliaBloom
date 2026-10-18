@@ -131,6 +131,6 @@ jobs:
         shell: pwsh
         run: |
           gh release view v0.7.0 *> $null
-          if ($LASTEXITCODE -eq 0) { throw 'v0.7.0 already exists; refusing to replace it.' }
+          if ($LASTEXITCODE -eq 0) { Write-Host 'v0.7.0 already exists; skipping the duplicate release.'; exit 0 }
           gh release create v0.7.0 LoliaBloom-win-x64.exe LoliaBloom-win-x64.zip LoliaBloom-screenshot.png LoliaBloom-create.png LoliaBloom-details.png --target '${{ github.sha }}' --title '洛链绽放 · Lolia Bloom v0.7.0' --notes 'Adds a Linux Docker web manager for Lolia FRP tunnels with secure administrator login, cloud sync, per-tunnel start/stop and startup switches, container network traffic charts and verified FRP updates. Keeps the Windows x64 single-file and ZIP releases.'
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
