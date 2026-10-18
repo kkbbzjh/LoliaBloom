@@ -20,6 +20,7 @@ public partial class MainWindow:ChromeWindow {
  readonly SemaphoreSlim authGate=new(1,1);
  readonly SemaphoreSlim pipeGate=new(1,1);
  bool installingService;
+ TunnelDetailsWindow? details;
  readonly System.Windows.Threading.DispatcherTimer poller=new(){Interval=TimeSpan.FromSeconds(1)};
  readonly Dictionary<string,TrafficSample> cloudTotals=new();
  bool cloudRefreshing;
@@ -30,8 +31,8 @@ public partial class MainWindow:ChromeWindow {
  readonly HashSet<string> autoPending=new();
  string? notice;DateTimeOffset noticeUntil;
  public MainWindow(){
-  InitializeComponent();api=new LoliaApi(http,GetAccessToken);
-  Loaded+=async(_,_)=>{if(session!=null)await Safe(Sync);else await Refresh();poller.Tick+=async(_,_)=>await Refresh();poller.Start();};Closed+=(_,_)=>poller.Stop();
+  InitializeComponent();UploadChart.LineBrush=new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(133,101,165));api=new LoliaApi(http,GetAccessToken);
+  Loaded+=async(_,_)=>{if(session!=null)await Safe(Sync);else await Refresh();poller.Tick+=async(_,_)=>await Refresh();poller.Start();};Closed+=(_,_)=>{poller.Stop();details?.Close();};
  }
  async Task<string> GetAccessToken(){
   await authGate.WaitAsync();
@@ -94,6 +95,9 @@ public partial class MainWindow:ChromeWindow {
    var selected=(TunnelGrid.SelectedItem as TunnelRow)?.Id;TunnelGrid.ItemsSource=list;TunnelGrid.SelectedItem=list.FirstOrDefault(t=>t.Id==selected);
    GlobalDownload.Text=list.Any(t=>t.DownloadBytesPerSecond!=null)?TunnelRow.Format(list.Sum(t=>t.DownloadBytesPerSecond??0),true):"—";
    GlobalUpload.Text=list.Any(t=>t.UploadBytesPerSecond!=null)?TunnelRow.Format(list.Sum(t=>t.UploadBytesPerSecond??0),true):"—";
+   DownloadChart.Add(list.Any(t=>t.DownloadBytesPerSecond!=null)?list.Sum(t=>t.DownloadBytesPerSecond??0):null);
+   UploadChart.Add(list.Any(t=>t.UploadBytesPerSecond!=null)?list.Sum(t=>t.UploadBytesPerSecond??0):null);
+   details?.Update(list.FirstOrDefault(t=>t.Id==details.TunnelId));
    RunningCount.Text=$"{list.Count(t=>t.Running)} / {list.Count}";
    EmptyState.Visibility=list.Count==0?Visibility.Visible:Visibility.Collapsed;
    Status.Text=DateTimeOffset.UtcNow<noticeUntil?notice:serviceStatus+$" · {DateTime.Now:HH:mm:ss}";
@@ -107,7 +111,7 @@ public partial class MainWindow:ChromeWindow {
     await limit.WaitAsync();try{return (Id:c.Id,Sample:await api.Traffic(c.CloudName));}finally{limit.Release();}
    });
    var samples=await Task.WhenAll(requests);foreach(var item in samples)cloudTotals[item.Id]=item.Sample;
-   var user=await api.User();CheckinStatus.Text=user.TryGetProperty("today_checked",out var status)&&status.GetBoolean()?"今日已签到，明天也要记得来。":"今日还未签到，去官网领取流量。";
+   CheckinStatus.Text="签到间隔以官网为准，点击查看可签到状态。";
   }catch(Exception e){CheckinStatus.Text="平台状态："+e.Message;}finally{cloudRefreshing=false;}
  }
  async Task Safe(Func<Task> f){try{await f();}catch(Exception e){Status.Text=e.Message;if(ServiceState()!="running"||e.Message.Contains("后台服务",StringComparison.Ordinal)){ServiceGuide.Visibility=Visibility.Visible;GuideTitle.Text="安装未完成，请点上方按钮安装或修复";GuideDescription.Text=e.Message;}}}
@@ -142,8 +146,10 @@ public partial class MainWindow:ChromeWindow {
    var nodes=new List<CloudNode>{new(1,"广州 · 精品线路（示例）","online",new[]{"tcp","udp","http","https"},false,true,"CN"),new(2,"香港 · 轻盈节点（示例）","online",new[]{"tcp","udp","http","https"},false,false,"HK"),new(3,"东京 · 备用节点（示例）","offline",new[]{"tcp","udp"},true,false,"JP")};
    var dialog=new CreateTunnelWindow(api,nodes){Owner=this};dialog.ContentRendered+=(_,_)=>dialog.Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.ApplicationIdle,new System.Action(()=>{Capture(dialog,args[createIndex+1]);System.Windows.Application.Current.Shutdown();}));dialog.Show();return;
   }
+  var detailIndex=Array.IndexOf(args,"--details-screenshot");
+  if(detailIndex>=0&&detailIndex+1<args.Length){var dialog=new TunnelDetailsWindow(new TunnelRow{Id="example-a",Name="远程桌面（示例）",Type="TCP",Node="香港 · 精品线路",LocalAddress="127.0.0.1:3389",RemoteAddress="demo.example:20001",AutoStart=true,Running=true,DownloadBytesPerSecond=182400,UploadBytesPerSecond=39200,TotalBytesIn=1824000000,TotalBytesOut=392000000,Description="用于远程访问工作电脑。此处均为界面演示数据。",MetricsSource="本地 FRP 进程 · 示例数据"}){Owner=this};dialog.ContentRendered+=(_,_)=>dialog.Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.ApplicationIdle,new System.Action(()=>{dialog.Preview();Capture(dialog,args[detailIndex+1]);System.Windows.Application.Current.Shutdown();}));dialog.Show();return;}
   var index=Array.IndexOf(args,"--screenshot");if(index<0||index+1>=args.Length)return;
-  Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.ApplicationIdle,new System.Action(()=>{poller.Stop();TunnelGrid.ItemsSource=new[]{new TunnelRow{Id="example-a",Name="远程桌面（示例）",Type="TCP",Node="香港",LocalAddress="127.0.0.1:3389",RemoteAddress="demo.example:20001",AutoStart=true},new TunnelRow{Id="example-b",Name="网站预览（示例）",Type="HTTPS",Node="广州",LocalAddress="127.0.0.1:8080",RemoteAddress="https://demo.example",AutoStart=false}};EmptyState.Visibility=Visibility.Collapsed;Status.Text="示例隧道 · 开机连接可逐条设置，粉色开启，灰色关闭";Capture(this,args[index+1]);System.Windows.Application.Current.Shutdown();}));
+  Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.ApplicationIdle,new System.Action(()=>{poller.Stop();TunnelGrid.ItemsSource=new[]{new TunnelRow{Id="example-a",Name="远程桌面（示例）",Type="TCP",Node="香港",LocalAddress="127.0.0.1:3389",RemoteAddress="demo.example:20001",AutoStart=true},new TunnelRow{Id="example-b",Name="网站预览（示例）",Type="HTTPS",Node="广州",LocalAddress="127.0.0.1:8080",RemoteAddress="https://demo.example",AutoStart=false}};EmptyState.Visibility=Visibility.Collapsed;RunningCount.Text="0 / 2";DownloadChart.Preview();UploadChart.Preview();GlobalDownload.Text="178.13 KB/s";GlobalUpload.Text="38.28 KB/s";Status.Text="示例隧道与流量曲线 · 开机连接可逐条设置";Capture(this,args[index+1]);System.Windows.Application.Current.Shutdown();}));
  }
  static void Capture(Window window,string path){
   window.UpdateLayout();var bitmap=new System.Windows.Media.Imaging.RenderTargetBitmap((int)window.ActualWidth,(int)window.ActualHeight,96,96,System.Windows.Media.PixelFormats.Pbgra32);bitmap.Render(window);var encoder=new System.Windows.Media.Imaging.PngBitmapEncoder();encoder.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(bitmap));using var output=File.Create(path);encoder.Save(output);
@@ -218,7 +224,7 @@ public partial class MainWindow:ChromeWindow {
   var reply=await Send(new(row.Running?"stop":"start",id));if(!reply.Ok)throw new Exception(reply.Message);await Refresh();
  });
  void Details_Click(object s,RoutedEventArgs e){
-  try{var t=Selected();MessageBox.Show($"名称：{t.Name}\nID：{t.Id}\n协议：{t.Type??"—"}\n节点：{t.Node??"—"}\n本地：{t.LocalAddress??"—"}\n远端：{t.RemoteAddress??"—"}\n状态：{t.StateText}\n开机连接：{(t.AutoStart?"是":"否")}\n下载速度：{t.DownloadText}\n上传速度：{t.UploadText}\n累计下载：{t.TotalInText}\n累计上传：{t.TotalOutText}\n说明：{t.Description??"—"}\n\n流量来源：{t.MetricsSource??"未接入官方流量 API"}","隧道详情",MessageBoxButton.OK,MessageBoxImage.Information);}catch(Exception ex){MessageBox.Show(ex.Message);}
+  try{var row=Selected();if(details?.TunnelId==row.Id){details.Activate();return;}details?.Close();var dialog=new TunnelDetailsWindow(row){Owner=this};details=dialog;dialog.Closed+=(_,_)=>{if(details==dialog)details=null;};dialog.Show();}catch(Exception ex){Status.Text=ex.Message;}
  }
  void Checkin_Click(object s,RoutedEventArgs e){
   try{Process.Start(new ProcessStartInfo("https://dash.lolia.link/dash"){UseShellExecute=true});CheckinStatus.Text="已打开官网，在首页点击签到即可。";}catch(Exception ex){MessageBox.Show(ex.Message);}

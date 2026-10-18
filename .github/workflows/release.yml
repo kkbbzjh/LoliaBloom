@@ -111,6 +111,8 @@ jobs:
           Copy-Item single-file-screenshot.png LoliaBloom-screenshot.png -Force
           $create = Start-Process (Join-Path $PWD 'LoliaBloom-win-x64.exe') -ArgumentList '--self-test','--create-screenshot',(Join-Path $PWD 'LoliaBloom-create.png') -PassThru
           if (-not $create.WaitForExit(90000) -or $create.ExitCode -ne 0 -or -not (Test-Path LoliaBloom-create.png)) { throw 'Create window launch failed' }
+          $details = Start-Process (Join-Path $PWD 'LoliaBloom-win-x64.exe') -ArgumentList '--self-test','--details-screenshot',(Join-Path $PWD 'LoliaBloom-details.png') -PassThru
+          if (-not $details.WaitForExit(90000) -or $details.ExitCode -ne 0 -or -not (Test-Path LoliaBloom-details.png)) { throw 'Details window launch failed' }
       - uses: actions/upload-artifact@v4
         with:
           name: LoliaBloom-win-x64
@@ -119,13 +121,14 @@ jobs:
             LoliaBloom-win-x64.zip
             LoliaBloom-screenshot.png
             LoliaBloom-create.png
+            LoliaBloom-details.png
           if-no-files-found: error
-      - name: Publish v0.6.1
+      - name: Publish v0.6.2
         env:
           GH_TOKEN: ${{ github.token }}
         shell: pwsh
         run: |
-          gh release view v0.6.1 *> $null
-          if ($LASTEXITCODE -eq 0) { throw 'v0.6.1 already exists; refusing to replace it.' }
-          gh release create v0.6.1 LoliaBloom-win-x64.exe LoliaBloom-win-x64.zip LoliaBloom-screenshot.png LoliaBloom-create.png --target '${{ github.sha }}' --title '洛链绽放 · Lolia Bloom v0.6.1' --notes 'Adds independent per-tunnel startup capsule switches with explicit saved state and rollback on save failure. Preserves settings across cloud synchronization and service restarts. Retries initial startup when the network is unavailable; manual stop cancels pending retries. Includes verified Windows service persistence tests, single EXE packaging and FRP updates.'
+          gh release view v0.6.2 *> $null
+          if ($LASTEXITCODE -eq 0) { throw 'v0.6.2 already exists; refusing to replace it.' }
+          gh release create v0.6.2 LoliaBloom-win-x64.exe LoliaBloom-win-x64.zip LoliaBloom-screenshot.png LoliaBloom-create.png LoliaBloom-details.png --target '${{ github.sha }}' --title '洛链绽放 · Lolia Bloom v0.6.2' --notes 'Adds live 60-second local traffic charts and a redesigned tunnel details window with live metrics, startup state and address copying. Keeps a single website check-in entry in the lower-left corner and removes calendar-day check-in wording. Retains single EXE packaging, independent startup switches and FRP updates.'
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
