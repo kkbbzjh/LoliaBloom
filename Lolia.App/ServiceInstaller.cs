@@ -35,6 +35,7 @@ internal static class ServiceInstaller {
    var version=File.Exists(versionFile)?File.ReadAllText(versionFile).Trim().TrimStart('v'):"";
    bool keep=Version.TryParse(version,out var parsed)&&parsed>=new Version(0,71,2)&&File.Exists(Path.Combine(engine,"frpc.exe"));
    if(!keep){var bundled=Path.Combine(AppContext.BaseDirectory,"frpc.exe");if(!File.Exists(bundled))throw new FileNotFoundException("内置 FRP 文件缺失，请重新下载发布包。",bundled);File.Copy(bundled,Path.Combine(engine,"frpc.exe"),true);File.WriteAllText(versionFile,"v0.71.2",Encoding.ASCII);}
+   service?.Dispose(); // Release SCM handles before repairing a damaged registration.
    Log("直接配置 Windows 服务路径、自动启动和故障恢复…");
    var binary="\""+Path.Combine(target,"Service","Lolia.Service.exe")+"\"";
    ServiceRegistration.Configure(ServiceName,binary,Log);

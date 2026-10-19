@@ -59,6 +59,16 @@ jobs:
           if ($installer.ExitCode -ne 0) { throw 'Native service installer failed' }
           if ((Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Services\LoliaBloomService').DelayedAutoStart -ne 0) { throw 'Missing delayed autostart value was not repaired' }
           if ((Get-Content $engineVersion -Raw).Trim() -ne 'v99.0.0' -or (Get-FileHash $engine).Hash -ne $engineHash) { throw 'Installer overwrote newer FRP' }
+          $damaged = Get-Service LoliaBloomService
+          $damaged.Stop()
+          $damaged.WaitForStatus('Stopped', [TimeSpan]::FromSeconds(30))
+          $damaged.Dispose()
+          Remove-Item 'HKLM:\SYSTEM\CurrentControlSet\Services\LoliaBloomService' -Recurse -Force
+          $repair = Start-Process (Join-Path $PWD 'dist/Lolia.App.exe') -ArgumentList '--install-service','--install-log',(Join-Path $PWD 'damaged-registration.log') -PassThru -Wait
+          Get-Content damaged-registration.log
+          if ($repair.ExitCode -ne 0) { throw 'Repair of orphaned SCM registration failed' }
+          if ((Get-Content $engineVersion -Raw).Trim() -ne 'v99.0.0' -or (Get-FileHash $engine).Hash -ne $engineHash) { throw 'Registration repair changed the FRP engine' }
+          Write-Host 'PASS: orphaned service registry repaired without deleting user data or newer FRP'
           'v0.71.2' | Set-Content $engineVersion -Encoding ASCII
           try {
             (Get-Service LoliaBloomService).WaitForStatus('Running', [TimeSpan]::FromSeconds(30))
@@ -132,12 +142,12 @@ jobs:
             LoliaBloom-create.png
             LoliaBloom-details.png
           if-no-files-found: error
-      - name: Publish v0.7.8
+      - name: Publish v0.7.9
         env:
           GH_TOKEN: ${{ github.token }}
         shell: pwsh
         run: |
-          gh release view v0.7.8 *> $null
-          if ($LASTEXITCODE -eq 0) { Write-Host 'v0.7.8 already exists; skipping the duplicate release.'; exit 0 }
-          gh release create v0.7.8 LoliaBloom-win-x64.exe LoliaBloom-win-x64.zip LoliaBloom-screenshot.png LoliaBloom-create.png LoliaBloom-details.png --target '${{ github.sha }}' --title '洛链绽放 · Lolia Bloom v0.7.8' --notes 'Fixes installation on systems where sc.exe fails to query the delayed autostart flag. Registers and repairs service configuration directly through Windows SCM APIs, restores the normal autostart flag, preserves data and newer FRP versions, and verifies startup and IPC.'
+          gh release view v0.7.9 *> $null
+          if ($LASTEXITCODE -eq 0) { Write-Host 'v0.7.9 already exists; skipping the duplicate release.'; exit 0 }
+          gh release create v0.7.9 LoliaBloom-win-x64.exe LoliaBloom-win-x64.zip LoliaBloom-screenshot.png LoliaBloom-create.png LoliaBloom-details.png --target '${{ github.sha }}' --title '洛链绽放 · Lolia Bloom v0.7.9' --notes 'Repairs orphaned Windows service registrations when updating service configuration fails with Windows error 2. Restores missing registration fields and rebuilds only the service registration if necessary, preserving tunnel data, login information and the FRP engine. Tests include an existing SCM service whose registry key has been removed.'
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
