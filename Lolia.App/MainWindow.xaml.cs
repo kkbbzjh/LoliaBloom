@@ -83,9 +83,9 @@ public partial class MainWindow:ChromeWindow {
    if(!installingService){
     var ready=serviceStatus=="后台服务已连接";
     if(ready&&list.Any(t=>t.Running&&string.IsNullOrWhiteSpace(t.MetricsSource)))ready=false;
-    ServiceGuide.Visibility=ready?Visibility.Collapsed:Visibility.Visible;
+    ServiceGuide.Visibility=ready&&installLogPath==null?Visibility.Collapsed:Visibility.Visible;
     ServiceButton.Content=ready?"✓ 后台服务已就绪":"① 安装 / 修复后台服务";
-    if(!ready&&!GuideTitle.Text.StartsWith("安装未完成",StringComparison.Ordinal)){
+    if(!ready&&installLogPath==null&&!GuideTitle.Text.StartsWith("安装未完成",StringComparison.Ordinal)){
      var state=ServiceState();
      GuideTitle.Text=state=="尚未安装后台服务"?"第一次使用：请先安装后台服务":"后台服务需要更新或修复";
      GuideDescription.Text=state=="尚未安装后台服务"?"点击上方紫色按钮，在 Windows 提示时选择“是”。安装完成后，就可以启动隧道了。":state=="running"?"点击上方按钮更新服务，完成后即可使用新版开机连接和本地实时速率。":"点击上方按钮启动或修复后台服务，完成后即可启动隧道。";
@@ -199,22 +199,41 @@ public partial class MainWindow:ChromeWindow {
    var reply=await Send(new("engine-update"));if(!reply.Ok)throw new Exception(reply.Message);MessageBox.Show(reply.Message,"洛链绽放");
   }finally{installingService=false;poller.Start();await Refresh();}
  });
+ string? installLogPath;
  async void Install_Click(object s,RoutedEventArgs e){
-  if(installingService)return;installingService=true;poller.Stop();
+  if(installingService)return;installingService=true;poller.Stop();bool verified=false;
   try{
-   var script=Path.Combine(AppContext.BaseDirectory,"install-service.ps1");
-   if(!File.Exists(script))throw new FileNotFoundException("安装脚本缺失，请完整解压新版程序",script);
-   ServiceGuide.Visibility=Visibility.Visible;GuideTitle.Text="正在安装并验证后台服务…";GuideDescription.Text="请允许 Windows 管理员授权。完成后会自动连接并同步隧道。";ServiceButton.Content="正在安装…";ServiceButton.IsEnabled=false;
-   Status.Text="正在安装并验证后台服务，请确认管理员授权…";
-   using var process=Process.Start(new ProcessStartInfo("powershell.exe",$"-NoProfile -ExecutionPolicy Bypass -File \"{script}\""){Verb="runas",UseShellExecute=true,WorkingDirectory=AppContext.BaseDirectory})??throw new Exception("无法启动服务安装程序");
-   await process.WaitForExitAsync();
-   if(process.ExitCode!=0){var log=Path.Combine(Paths.Root,"install-result.txt");throw new Exception("后台服务安装失败："+(File.Exists(log)?await File.ReadAllTextAsync(log):"未完成管理员授权，或安装进程异常退出"));}
-   var reply=await Send(new("list"));if(!reply.Ok)throw new Exception(reply.Message);
-   ServiceGuide.Visibility=Visibility.Collapsed;ServiceButton.Content="✓ 后台服务已就绪";Status.Text="后台服务安装成功，正在同步隧道…";
+   var logs=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"LoliaBloom","logs");Directory.CreateDirectory(logs);
+   installLogPath=Path.Combine(logs,"install-"+DateTime.Now.ToString("yyyyMMdd-HHmmss")+"-"+Guid.NewGuid().ToString("N")[..8]+".log");
+   await File.WriteAllTextAsync(installLogPath,"等待 Windows 管理员授权…"+Environment.NewLine);
+   InstallLogText.Text=await File.ReadAllTextAsync(installLogPath);InstallLogPanel.Visibility=Visibility.Visible;InstallLogPanel.IsExpanded=true;
+   ServiceGuide.Visibility=Visibility.Visible;GuideTitle.Text="正在安装并验证后台服务…";GuideDescription.Text="请允许 Windows 管理员授权。安装步骤会显示在下方，日志会自动保存。";ServiceButton.Content="正在安装…";ServiceButton.IsEnabled=false;
+   Status.Text="正在请求管理员权限…";
+   var start=new ProcessStartInfo(Path.Combine(AppContext.BaseDirectory,"Lolia.App.exe")){Verb="runas",UseShellExecute=true,WorkingDirectory=AppContext.BaseDirectory,WindowStyle=ProcessWindowStyle.Hidden};
+   start.ArgumentList.Add("--install-service");start.ArgumentList.Add("--install-log");start.ArgumentList.Add(installLogPath);
+   using var process=Process.Start(start)??throw new Exception("无法启动后台服务安装程序。");
+   var finish=process.WaitForExitAsync();var started=DateTime.UtcNow;bool slow=false;
+   while(!finish.IsCompleted){
+    await Task.WhenAny(finish,Task.Delay(700));
+    try{InstallLogText.Text=await File.ReadAllTextAsync(installLogPath);InstallLogText.ScrollToEnd();}catch(IOException){}
+    if(!slow&&DateTime.UtcNow-started>TimeSpan.FromSeconds(90)){slow=true;GuideTitle.Text="安装耗时较长，仍在等待结果";GuideDescription.Text="请查看下方最新步骤。暂时不要重复安装；日志已保存，可随时打开。";}
+   }
+   await finish;InstallLogText.Text=await File.ReadAllTextAsync(installLogPath);InstallLogText.ScrollToEnd();
+   if(process.ExitCode!=0)throw new Exception("安装失败（退出码 "+process.ExitCode+"）。请查看下方完整日志，或点击“复制日志”发给我排查。");
+   var reply=await Send(new("list"));if(!reply.Ok)throw new Exception(reply.Message);verified=true;
+   GuideTitle.Text="后台服务安装成功";GuideDescription.Text="服务已启动，连接验证通过。安装日志已自动保存。";InstallLogPanel.IsExpanded=false;ServiceButton.Content="✓ 后台服务已就绪";
+   notice="后台服务安装成功，连接验证通过";noticeUntil=DateTimeOffset.UtcNow.AddSeconds(30);Status.Text=notice;
    if(session!=null)await Sync();
-  }catch(Exception ex){ServiceGuide.Visibility=Visibility.Visible;GuideTitle.Text="安装未完成，请点击上方按钮重试";GuideDescription.Text=ex is System.ComponentModel.Win32Exception w&&w.NativeErrorCode==1223?"你取消了 Windows 管理员授权。重新点击按钮并选择允许，才能安装后台服务。":ex.Message;Status.Text=GuideDescription.Text;}
-  finally{installingService=false;ServiceButton.IsEnabled=true;ServiceButton.Content=ServiceState()=="running"?"✓ 后台服务已就绪":"① 安装 / 修复后台服务";poller.Start();}
+  }catch(Exception ex){
+   ServiceGuide.Visibility=Visibility.Visible;GuideTitle.Text=verified?"服务已安装，但云端同步失败":"安装未完成，请查看日志";
+   GuideDescription.Text=ex is System.ComponentModel.Win32Exception w&&w.NativeErrorCode==1223?"你取消了 Windows 管理员授权。重新点击安装并选择允许即可。":ex.Message;
+   Status.Text=GuideDescription.Text;InstallLogPanel.IsExpanded=true;
+   if(installLogPath!=null){try{await File.AppendAllTextAsync(installLogPath,Environment.NewLine+"主程序："+ex+Environment.NewLine);InstallLogText.Text=await File.ReadAllTextAsync(installLogPath);}catch{} }
+  }finally{installingService=false;ServiceButton.IsEnabled=true;ServiceButton.Content=verified?"✓ 后台服务已就绪":"① 安装 / 修复后台服务";poller.Start();}
  }
+ void CopyInstallLog_Click(object s,RoutedEventArgs e){try{Clipboard.SetText(InstallLogText.Text);Status.Text="安装日志已复制";}catch(Exception ex){Status.Text="复制失败："+ex.Message;}}
+ void OpenInstallLog_Click(object s,RoutedEventArgs e){try{if(installLogPath!=null)Process.Start(new ProcessStartInfo("notepad.exe"){ArgumentList={installLogPath},UseShellExecute=false});}catch(Exception ex){Status.Text=ex.Message;}}
+
  void Uninstall_Click(object s,RoutedEventArgs e)=>RunElevated("uninstall-service.cmd");
  void RunElevated(string script){
   var path=Path.Combine(AppContext.BaseDirectory,script);

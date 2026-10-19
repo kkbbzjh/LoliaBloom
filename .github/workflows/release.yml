@@ -46,14 +46,16 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          & cmd.exe /c dist\install-service.cmd
-          if ($LASTEXITCODE) { throw 'Service installation failed' }
+          $installer = Start-Process (Join-Path $PWD 'dist/Lolia.App.exe') -ArgumentList '--install-service','--install-log',(Join-Path $PWD 'native-install.log') -PassThru -Wait
+          Get-Content native-install.log
+          if ($installer.ExitCode -ne 0) { throw 'Native service installer failed' }
           $engine = Join-Path $env:ProgramFiles 'LoliaBloom/Engine/frpc.exe'
           $engineHash = (Get-FileHash $engine).Hash
           $engineVersion = Join-Path $env:ProgramFiles 'LoliaBloom/Engine/engine-version.txt'
           'v99.0.0' | Set-Content $engineVersion -Encoding ASCII
-          & cmd.exe /c dist\install-service.cmd
-          if ($LASTEXITCODE) { throw 'Service upgrade failed' }
+          $installer = Start-Process (Join-Path $PWD 'dist/Lolia.App.exe') -ArgumentList '--install-service','--install-log',(Join-Path $PWD 'native-install.log') -PassThru -Wait
+          Get-Content native-install.log
+          if ($installer.ExitCode -ne 0) { throw 'Native service installer failed' }
           if ((Get-Content $engineVersion -Raw).Trim() -ne 'v99.0.0' -or (Get-FileHash $engine).Hash -ne $engineHash) { throw 'Installer overwrote newer FRP' }
           'v0.71.2' | Set-Content $engineVersion -Encoding ASCII
           try {
@@ -125,12 +127,12 @@ jobs:
             LoliaBloom-create.png
             LoliaBloom-details.png
           if-no-files-found: error
-      - name: Publish v0.7.4
+      - name: Publish v0.7.5
         env:
           GH_TOKEN: ${{ github.token }}
         shell: pwsh
         run: |
-          gh release view v0.7.4 *> $null
-          if ($LASTEXITCODE -eq 0) { Write-Host 'v0.7.4 already exists; skipping the duplicate release.'; exit 0 }
-          gh release create v0.7.4 LoliaBloom-win-x64.exe LoliaBloom-win-x64.zip LoliaBloom-screenshot.png LoliaBloom-create.png LoliaBloom-details.png --target '${{ github.sha }}' --title '洛链绽放 · Lolia Bloom v0.7.4' --notes 'Fixes title-bar logo rendering by using a normalized bitmap resource and eagerly decoding the embedded logo into a frozen premultiplied pixel buffer with high-quality scaling. Applies to the main, tunnel creation and details windows.'
+          gh release view v0.7.5 *> $null
+          if ($LASTEXITCODE -eq 0) { Write-Host 'v0.7.5 already exists; skipping the duplicate release.'; exit 0 }
+          gh release create v0.7.5 LoliaBloom-win-x64.exe LoliaBloom-win-x64.zip LoliaBloom-screenshot.png LoliaBloom-create.png LoliaBloom-details.png --target '${{ github.sha }}' --title '洛链绽放 · Lolia Bloom v0.7.5' --notes 'Replaces the in-app PowerShell service installer with a native elevated installer. Shows live installation steps, saves a unique log for every attempt, and adds copy/open log buttons and explicit success or failure feedback.'
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
