@@ -1,1 +1,3 @@
 The Windows portable distribution includes frpc.exe from Lolia-FRP/lolia-frp v0.71.2, licensed under Apache License 2.0. Source: https://github.com/Lolia-FRP/lolia-frp/tree/v0.71.2 . The license is included under licenses/lolia-frp-LICENSE. No changes were made to that executable.
+
+The Windows automatic website check-in window uses Microsoft.Web.WebView2 SDK 1.0.3537.50. Copyright Microsoft Corporation. The SDK license and third-party notices are included under licenses/webview2-LICENSE.txt and licenses/webview2-NOTICE.txt. Microsoft Edge WebView2 Runtime is installed separately and retains its own terms. Source/package: https://www.nuget.org/packages/Microsoft.Web.WebView2/1.0.3537.50 .
