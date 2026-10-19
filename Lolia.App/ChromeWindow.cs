@@ -4,10 +4,19 @@ using System.Windows.Interop;
 using System.Runtime.InteropServices;
 namespace Lolia.App;
 public class ChromeWindow:Window {
+ bool relaxedMinimum;double savedMinWidth,savedMinHeight,savedMaxWidth,savedMaxHeight;
  public ChromeWindow(){
   WindowStyle=WindowStyle.None;
+  StateChanged+=(_,_)=>UpdateMaximizedBounds();
   SourceInitialized+=(_,_)=>HwndSource.FromHwnd(new WindowInteropHelper(this).Handle)?.AddHook(WindowMessage);
   WindowChrome.SetWindowChrome(this,new WindowChrome{CaptionHeight=60,ResizeBorderThickness=new Thickness(6),GlassFrameThickness=new Thickness(0),CornerRadius=new CornerRadius(16)});
+ }
+ void UpdateMaximizedBounds(){
+  if(WindowState==WindowState.Maximized){
+   if(!relaxedMinimum){savedMinWidth=MinWidth;savedMinHeight=MinHeight;savedMaxWidth=MaxWidth;savedMaxHeight=MaxHeight;relaxedMinimum=true;}
+   MinWidth=0;MinHeight=0;var area=MonitorWorkArea();var dpi=System.Windows.Media.VisualTreeHelper.GetDpi(this);
+   MaxWidth=area.Width/dpi.DpiScaleX;MaxHeight=area.Height/dpi.DpiScaleY;
+  }else if(relaxedMinimum&&WindowState==WindowState.Normal){MaxWidth=savedMaxWidth;MaxHeight=savedMaxHeight;MinWidth=savedMinWidth;MinHeight=savedMinHeight;relaxedMinimum=false;}
  }
  IntPtr WindowMessage(IntPtr hwnd,int message,IntPtr wParam,IntPtr lParam,ref bool handled){
   if(message==0x0024){
