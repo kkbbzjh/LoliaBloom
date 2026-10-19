@@ -41,7 +41,10 @@ internal static class ServiceInstaller {
     using var process=Process.Start(start)??throw new Exception("无法启动 Windows 服务管理工具。");
     var stdout=process.StandardOutput.ReadToEndAsync();var stderr=process.StandardError.ReadToEndAsync();
     using var timeout=new CancellationTokenSource(TimeSpan.FromSeconds(30));await process.WaitForExitAsync(timeout.Token);
-    Log((await stdout+await stderr).Trim());if(process.ExitCode!=0)throw new Exception($"Windows 服务配置失败，错误码 {process.ExitCode}，详情见上方日志。");
+    Log((await stdout+await stderr).Trim());if(process.ExitCode!=0){
+     var action=process.ExitCode switch{5=>"请确认管理员授权；检查安全软件是否阻止服务注册。",1072=>"服务正等待删除。请关闭 Windows 服务管理窗口和旧客户端；仍失败时重启电脑后重试。",1053=>"服务启动超时。请检查服务文件是否完整，并提交本日志。",87=>"服务参数无效，请提交本日志和版本号。",_=>"请复制完整日志提交 BUG，不要反复盲目重试。"};
+     throw new Exception($"Windows 服务配置失败，错误码 {process.ExitCode}：{new System.ComponentModel.Win32Exception(process.ExitCode).Message}。{action}");
+    }
    }
    Log("注册开机自动启动和故障恢复…");
    var binary="\""+Path.Combine(target,"Service","Lolia.Service.exe")+"\"";
