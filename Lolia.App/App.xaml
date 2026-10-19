@@ -1,4 +1,4 @@
-<Application x:Class="Lolia.App.App" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" StartupUri="MainWindow.xaml">
+<Application x:Class="Lolia.App.App" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 <Application.Resources>
 <SolidColorBrush x:Key="Accent" Color="#DB4385"/><SolidColorBrush x:Key="Ink" Color="#332839"/><SolidColorBrush x:Key="Muted" Color="#928393"/>
 <Style TargetType="Window"><Setter Property="FontFamily" Value="Segoe UI, Microsoft YaHei UI"/><Setter Property="FontSize" Value="13"/><Setter Property="Foreground" Value="{StaticResource Ink}"/></Style>

@@ -28,6 +28,7 @@ public partial class MainWindow:ChromeWindow {
  readonly Dictionary<string,CloudTunnel> cloud=new();
  LoliaApi api=null!;
  bool refreshing,signingIn;
+ string? lastServiceError,lastReportedTunnelError;
  readonly HashSet<string> autoPending=new();
  string? notice;DateTimeOffset noticeUntil;
  public MainWindow(){
@@ -76,8 +77,8 @@ public partial class MainWindow:ChromeWindow {
   try{
    List<TunnelRow> list;
    string serviceStatus;
-   try{var r=await Send(new("list"));if(!r.Ok)throw new Exception(r.Message);list=JsonSerializer.Deserialize<List<TunnelRow>>(r.Data!,Paths.Json)??new();serviceStatus=r.Message=="OK:3"?"后台服务已连接":"后台服务需要升级，点击上方按钮更新开机连接和本地速率";}
-   catch(Exception serviceError){list=cloud.Values.Select(t=>new TunnelRow{Id=t.Id,Name=t.Label,Type=t.Type,Node=t.Node,LocalAddress=t.LocalAddress,RemoteAddress=t.RemoteAddress,Description=t.Remark}).ToList();serviceStatus=serviceError.Message;}
+   try{var r=await Send(new("list"));if(!r.Ok)throw new Exception(r.Message);list=JsonSerializer.Deserialize<List<TunnelRow>>(r.Data!,Paths.Json)??new();serviceStatus=r.Message=="OK:4"?"后台服务已连接":"后台服务需要升级，点击上方按钮更新诊断与开机连接功能";}
+   catch(Exception serviceError){lastServiceError=serviceError.Message;list=cloud.Values.Select(t=>new TunnelRow{Id=t.Id,Name=t.Label,Type=t.Type,Node=t.Node,LocalAddress=t.LocalAddress,RemoteAddress=t.RemoteAddress,Description=t.Remark}).ToList();serviceStatus=serviceError.Message;}
    foreach(var t in list){if(cloudTotals.TryGetValue(t.Id,out var total)){t.TotalBytesIn=total.In;t.TotalBytesOut=total.Out;}}
    if(session!=null&&!cloudRefreshing&&DateTimeOffset.UtcNow>=nextCloudPoll)_=RefreshCloudData();
    if(!installingService){
@@ -99,6 +100,10 @@ public partial class MainWindow:ChromeWindow {
    UploadChart.Add(list.Any(t=>t.UploadBytesPerSecond!=null)?list.Sum(t=>t.UploadBytesPerSecond??0):null);
    details?.Update(list.FirstOrDefault(t=>t.Id==details.TunnelId));
    RunningCount.Text=$"{list.Count(t=>t.Running)} / {list.Count}";
+   var failed=list.FirstOrDefault(t=>!string.IsNullOrWhiteSpace(t.LastError));
+   var fingerprint=failed==null?null:failed.Id+failed.LastError;
+   if(failed!=null&&fingerprint!=lastReportedTunnelError){lastReportedTunnelError=fingerprint;ShowDiagnostics("隧道启动 / 开机连接异常",failed.LastError??"");}
+
    EmptyState.Visibility=list.Count==0?Visibility.Visible:Visibility.Collapsed;
    Status.Text=DateTimeOffset.UtcNow<noticeUntil?notice:serviceStatus+$" · {DateTime.Now:HH:mm:ss}";
   }catch(Exception e){Status.Text=e.Message;}finally{refreshing=false;}
@@ -120,7 +125,34 @@ public partial class MainWindow:ChromeWindow {
    CheckinStatus.Text="签到间隔以官网为准，点击查看可签到状态。";
   }catch(Exception e){CheckinStatus.Text="平台状态："+e.Message;}finally{cloudRefreshing=false;}
  }
- async Task Safe(Func<Task> f){try{await f();}catch(Exception e){Status.Text=e.Message;if(ServiceState()!="running"||e.Message.Contains("后台服务",StringComparison.Ordinal)){ServiceGuide.Visibility=Visibility.Visible;GuideTitle.Text="安装未完成，请点上方按钮安装或修复";GuideDescription.Text=e.Message;}}}
+ async Task Safe(Func<Task> f){try{await f();}catch(Exception e){ShowDiagnostics("操作未完成",e.ToString());}}
+ string DiagnosticReport(string title,string detail){
+  var report=new StringBuilder();report.AppendLine("洛链绽放诊断报告（请连同你的操作步骤提交）");
+  report.AppendLine("时间："+DateTimeOffset.Now.ToString("O"));report.AppendLine("版本："+typeof(MainWindow).Assembly.GetName().Version);report.AppendLine("系统："+Environment.OSVersion);report.AppendLine("后台服务："+ServiceState());
+  report.AppendLine("问题："+title);report.AppendLine("具体错误："+detail);
+  if(lastServiceError!=null)report.AppendLine("最近一次服务通信错误："+lastServiceError);
+  report.AppendLine("建议处理步骤：");
+  report.AppendLine("1. 服务未安装、未运行或无法通信：安装 / 修复后台服务，并允许管理员授权；查看安装日志。");
+  report.AppendLine("2. 凭据 / 授权失败：重新登录并同步，核对官网隧道和账号状态。");
+  report.AppendLine("3. 网络、节点或连接失败：确认节点在线、网络可用、本地 IP 和端口正确且目标服务正在运行。");
+  report.AppendLine("4. 引擎缺失 / 拒绝访问：检查安全软件隔离记录及引擎权限，重新安装服务；不要盲目关闭安全软件。");
+  report.AppendLine("5. 开机连接：开启后于下次后台服务启动生效；查看下方重试状态。手动停止会取消本轮重试。");
+  report.AppendLine("仍无法解决：复制本报告，附复现步骤提交到 https://github.com/kkbbzjh/LoliaBloom/issues/new");
+  foreach(var row in (TunnelGrid.ItemsSource as IEnumerable<TunnelRow>)??Array.Empty<TunnelRow>()){
+   report.AppendLine($"\n隧道：{row.Name} [{row.Id}] / {row.Node} / {row.Type}");report.AppendLine("FRP 进程："+(row.Running?"运行中（不等同于已完成远端连接）":"已停止"));
+   report.AppendLine("开机连接："+(row.AutoStart?"开启":"关闭")+"；"+row.StartupStatus);report.AppendLine("最近错误："+(row.LastError??"未记录"));report.AppendLine("最近 FRP 输出：\n"+row.RecentLog);
+  }
+  var text=report.ToString();foreach(var secret in new[]{session?.AccessToken,session?.RefreshToken})if(!string.IsNullOrWhiteSpace(secret))text=text.Replace(secret,"[REDACTED]",StringComparison.Ordinal);
+  return System.Text.RegularExpressions.Regex.Replace(text,@"(?i)(token|password|authorization|secret)([\s:=]+)[^\s,;]+","$1$2[REDACTED]");
+ }
+ void ShowDiagnostics(string title,string detail){
+  ServiceGuide.Visibility=Visibility.Visible;GuideTitle.Text=title;GuideDescription.Text="请查看下方具体错误与处理建议。可一键复制诊断报告，保留此报告提交 BUG。";
+  InstallLogPanel.Visibility=Visibility.Visible;InstallLogPanel.IsExpanded=true;InstallLogText.Text=DiagnosticReport(title,detail);Status.Text=title;
+  try{var folder=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"LoliaBloom","logs");Directory.CreateDirectory(folder);installLogPath=Path.Combine(folder,"diagnostic-"+DateTime.Now.ToString("yyyyMMdd-HHmmss")+".log");File.WriteAllText(installLogPath,InstallLogText.Text);}catch(Exception ex){Status.Text=title+"；日志保存失败："+ex.Message;}
+ }
+ void Diagnostics_Click(object s,RoutedEventArgs e)=>ShowDiagnostics("手动查看诊断", "请描述刚才执行了什么操作、预期行为和实际表现。");
+ void DismissDiagnostics_Click(object s,RoutedEventArgs e){installLogPath=null;InstallLogPanel.Visibility=Visibility.Collapsed;ServiceGuide.Visibility=Visibility.Collapsed;}
+
  async void Refresh_Click(object s,RoutedEventArgs e){nextCloudPoll=DateTimeOffset.MinValue;await Safe(Refresh);}
  async void Login_Click(object s,RoutedEventArgs e)=>await Safe(Login);
  // Public OAuth application identifier; not a client secret.
@@ -266,8 +298,9 @@ public partial class MainWindow:ChromeWindow {
  public long? TotalBytesIn{get;set;}public long? TotalBytesOut{get;set;}public double? DownloadBytesPerSecond{get;set;}public double? UploadBytesPerSecond{get;set;}public string? MetricsSource{get;set;}public long? LocalBytesIn{get;set;}public long? LocalBytesOut{get;set;}
  public System.Windows.Media.Brush StateBrush=>Running?System.Windows.Media.Brushes.MediumSeaGreen:System.Windows.Media.Brushes.IndianRed;
  public System.Windows.Media.Brush ActionBrush=>Running?new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(144,121,145)):new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(219,67,133));
+ public string? LastError{get;set;}public string? StartupStatus{get;set;}public string? RecentLog{get;set;}
  public string AutoText=>AutoStart?"已开启":"已关闭";
- public string StateText=>Running?"运行中":"已停止";public string ToggleText=>Running?"停止":"启动";
+ public string StateText=>!Running&&!string.IsNullOrWhiteSpace(LastError)?"启动异常":Running?"进程运行":"已停止";public string ToggleText=>Running?"停止":"启动";
  public static string Format(double? n,bool rate=false){if(n is null)return "—";var v=n.Value;string[] u={"B","KB","MB","GB","TB"};int i=0;while(v>=1024&&i<u.Length-1){v/=1024;i++;}return $"{v:0.##} {u[i]}"+(rate?"/s":"");}
  public string DownloadText=>Format(DownloadBytesPerSecond,true);public string UploadText=>Format(UploadBytesPerSecond,true);
  public string TotalInText=>Format(TotalBytesIn);public string TotalOutText=>Format(TotalBytesOut);

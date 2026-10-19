@@ -47,14 +47,14 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           $installer = Start-Process (Join-Path $PWD 'dist/Lolia.App.exe') -ArgumentList '--install-service','--install-log',(Join-Path $PWD 'native-install.log') -PassThru -Wait
-          Get-Content native-install.log
+          if (Test-Path native-install.log) { Get-Content native-install.log } else { throw ('Installer produced no log; exit=' + $installer.ExitCode) }
           if ($installer.ExitCode -ne 0) { throw 'Native service installer failed' }
           $engine = Join-Path $env:ProgramFiles 'LoliaBloom/Engine/frpc.exe'
           $engineHash = (Get-FileHash $engine).Hash
           $engineVersion = Join-Path $env:ProgramFiles 'LoliaBloom/Engine/engine-version.txt'
           'v99.0.0' | Set-Content $engineVersion -Encoding ASCII
           $installer = Start-Process (Join-Path $PWD 'dist/Lolia.App.exe') -ArgumentList '--install-service','--install-log',(Join-Path $PWD 'native-install.log') -PassThru -Wait
-          Get-Content native-install.log
+          if (Test-Path native-install.log) { Get-Content native-install.log } else { throw ('Installer produced no log; exit=' + $installer.ExitCode) }
           if ($installer.ExitCode -ne 0) { throw 'Native service installer failed' }
           if ((Get-Content $engineVersion -Raw).Trim() -ne 'v99.0.0' -or (Get-FileHash $engine).Hash -ne $engineHash) { throw 'Installer overwrote newer FRP' }
           'v0.71.2' | Set-Content $engineVersion -Encoding ASCII
@@ -91,6 +91,9 @@ jobs:
             if ($reply.data.Contains('ci-only-credential')) { throw 'Credential leaked through list IPC' }
             $items = $reply.data | ConvertFrom-Json
             if (@($items).Count -ne 2 -or -not ($items | Where-Object id -eq '99999999').autoStart -or ($items | Where-Object id -eq '99999998').autoStart) { throw 'Independent startup settings did not survive service restart' }
+            $failedRow = $items | Where-Object id -eq '99999999'
+            if (-not $failedRow.lastError -or -not $failedRow.startupStatus -or -not $failedRow.recentLog) { throw 'Startup failure diagnostics missing' }
+            if ($reply.data.Contains('ci-only-credential')) { throw 'Credential leaked in diagnostic report' }
             Invoke-ServiceCommand @{action='auto';id='99999999';value='false'}
             $off = (Invoke-ServiceCommand @{action='list'}).data | ConvertFrom-Json
             if (@($off | Where-Object autoStart).Count -ne 0) { throw 'Switch off was not persisted' }

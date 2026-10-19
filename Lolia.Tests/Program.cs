@@ -15,6 +15,7 @@ bootEnabled.Add("a");disabled.Tick(bootTime.AddMinutes(1),bootEnabled.Contains,_
 var transient=new StartupConnections(new[]{"a"});int transientAttempts=0;
 transient.Tick(bootTime,_=>true,_=>false,_=>{transientAttempts++;throw new IOException("network not ready");});
 transient.Tick(bootTime.AddSeconds(30),_=>true,_=>false,_=>transientAttempts++);Assert(transientAttempts==2,"startup errors retry without crashing host");
+Assert(boot.Describe("b").Contains("取消"),"cancelled startup feedback");Assert(boot.Describe("a").Contains("完成"),"completed startup feedback");
 Console.WriteLine("PASS: independent startup policy, retry delay, manual stop, stable completion and next-boot semantics");
 var seen=new List<string>();
 var handler=new Fake(async r=>{

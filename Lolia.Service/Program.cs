@@ -21,6 +21,8 @@ sealed class Manager:BackgroundService {
  readonly object gate=new();
  List<Tunnel> tunnels=new();
  StartupConnections? startup;
+ readonly Dictionary<string,string> errors=new();
+ readonly Dictionary<string,Queue<string>> recent=new();
  protected override async Task ExecuteAsync(CancellationToken ct) {
   traffic.Start();
   try { if(File.Exists(Paths.Tunnels)) {var bytes=await File.ReadAllBytesAsync(Paths.Tunnels,ct);tunnels=JsonSerializer.Deserialize<List<Tunnel>>(bytes.Length>0&&bytes[0]==(byte)'['?bytes:ProtectedData.Unprotect(bytes,null,DataProtectionScope.LocalMachine),Paths.Json)??new();} }catch{}
@@ -52,9 +54,9 @@ sealed class Manager:BackgroundService {
   switch(c.Action){
    case "engine-check":{var info=await new EngineUpdater(RunningIds,Stop,Start).Check();return new(true,"OK",JsonSerializer.Serialize(info,Paths.Json));}
    case "engine-update":return new(true,await new EngineUpdater(RunningIds,Stop,Start).Update());
-   case "list": return new(true,"OK:3",JsonSerializer.Serialize(tunnels.Select(t=>{
+   case "list": return new(true,"OK:4",JsonSerializer.Serialize(tunnels.Select(t=>{
     var active=IsRunning(t.Id);var m=traffic.Get(t.Id,active);
-    return new TunnelView(t.Id,t.Name,t.AutoStart,active,t.Type,t.Node,t.LocalAddress,t.RemoteAddress,t.Description,null,null,m.Download,m.Upload,m.Source,m.Received,m.Sent);
+    return new TunnelView(t.Id,t.Name,t.AutoStart,active,t.Type,t.Node,t.LocalAddress,t.RemoteAddress,t.Description,null,null,m.Download,m.Upload,m.Source,m.Received,m.Sent,Error(t.Id),t.AutoStart?startup?.Describe(t.Id):"未启用开机连接",Recent(t.Id));
    }),Paths.Json));
    case "sync": {
     var incoming=JsonSerializer.Deserialize<List<Tunnel>>(c.Value??"[]",Paths.Json)??new();
@@ -73,7 +75,7 @@ sealed class Manager:BackgroundService {
     if(!desired)startup?.Cancel(t.Id);
     return new(true,desired?"已开启开机连接，下次后台服务启动时生效":"已关闭开机连接，不影响当前运行状态",desired?"true":"false");
    }
-   case "start":return new(Start(c.Id??""),"启动请求已处理；如失败请检查 frpc.exe 和隧道凭据是否已配置");
+   case "start":{var id=c.Id??"";var ok=Start(id);return new(ok,ok?"FRP 进程已启动；连接结果请查看诊断日志":Error(id)??"启动失败，请查看诊断日志");}
    case "stop":return new(Stop(c.Id??""),"Stop requested");
    default:return new(false,"Unknown command");
   }
@@ -81,20 +83,34 @@ sealed class Manager:BackgroundService {
  async Task Save(CancellationToken ct){Paths.Ensure();var bytes=ProtectedData.Protect(JsonSerializer.SerializeToUtf8Bytes(tunnels,Paths.Json),null,DataProtectionScope.LocalMachine);await File.WriteAllBytesAsync(Paths.Tunnels+".tmp",bytes,ct);var acl=new FileSecurity();acl.SetAccessRuleProtection(true,false);foreach(var sid in new[]{WellKnownSidType.LocalSystemSid,WellKnownSidType.BuiltinAdministratorsSid})acl.AddAccessRule(new FileSystemAccessRule(new SecurityIdentifier(sid,null),FileSystemRights.FullControl,AccessControlType.Allow));FileSystemAclExtensions.SetAccessControl(new FileInfo(Paths.Tunnels+".tmp"),acl);File.Move(Paths.Tunnels+".tmp",Paths.Tunnels,true);}
  string[] RunningIds(){lock(gate)return running.Keys.Where(IsRunning).ToArray();}
  bool IsRunning(string id){lock(gate)return running.TryGetValue(id,out var p)&&!p.HasExited;}
+ string? Error(string id){lock(gate)return errors.GetValueOrDefault(id);}
+ string Recent(string id){lock(gate)return recent.TryGetValue(id,out var q)?string.Join(Environment.NewLine,q):"暂无 FRP 输出";}
+ void Record(string id,string message,bool error=false){lock(gate){
+  if(error)errors[id]=message;
+  if(!recent.TryGetValue(id,out var q))recent[id]=q=new();q.Enqueue($"{DateTimeOffset.Now:yyyy-MM-dd HH:mm:ss zzz} {message}");while(q.Count>20)q.Dequeue();
+  try{var path=Path.Combine(Paths.Root,"diagnostics.log");if(File.Exists(path)&&new FileInfo(path).Length>1024*1024)File.Move(path,path+".previous",true);File.AppendAllText(path,$"{DateTimeOffset.Now:O} [{id}] {message}{Environment.NewLine}");}catch{}
+ }}
  bool Start(string id){
-  if(!tunnels.Any(t=>t.Id==id)||!File.Exists(Paths.Frpc))return false;
-  lock(gate){
+  lock(gate){try{
+   var tunnel=tunnels.FirstOrDefault(t=>t.Id==id)??throw new Exception("未找到隧道。处理：先同步云端隧道，再重试启动。");
+   if(!File.Exists(Paths.Frpc))throw new FileNotFoundException("FRP 引擎缺失。处理：点击安装 / 修复后台服务；检查安全软件隔离记录。",Paths.Frpc);
    if(IsRunning(id))return true;
    if(running.Remove(id,out var exited)){traffic.Unregister(exited.Id);exited.Dispose();}
-   var psi=new ProcessStartInfo(Paths.Frpc){UseShellExecute=false,CreateNoWindow=true,WorkingDirectory=Paths.Root};
-   // Lolia requires an authorized per-tunnel credential. Never launch with a bare ID.
-   var key=tunnels.First(t=>t.Id==id).Credential;
-   if(string.IsNullOrWhiteSpace(key)){var keyPath=Path.Combine(Paths.Root,"keys",id+".txt");if(!File.Exists(keyPath))return false;key=File.ReadAllText(keyPath).Trim();}
-   if(string.IsNullOrWhiteSpace(key))return false;
+   var key=tunnel.Credential;
+   if(string.IsNullOrWhiteSpace(key)){var keyPath=Path.Combine(Paths.Root,"keys",id+".txt");if(File.Exists(keyPath))key=File.ReadAllText(keyPath).Trim();}
+   if(string.IsNullOrWhiteSpace(key))throw new Exception("缺少隧道连接凭据。处理：重新登录并同步；仍失败时检查官网隧道状态和授权范围。");
+   var secret=key;
+   var psi=new ProcessStartInfo(Paths.Frpc){UseShellExecute=false,CreateNoWindow=true,WorkingDirectory=Paths.Root,RedirectStandardOutput=true,RedirectStandardError=true};
    psi.ArgumentList.Add("-t");psi.ArgumentList.Add(id+":"+key);
-   var p=Process.Start(psi);if(p==null)return false;running[id]=p;traffic.Register(p.Id,id,tunnels.First(t=>t.Id==id).LocalAddress);return true;
-  }
+   var p=Process.Start(psi)??throw new Exception("Windows 未能创建 FRP 进程。处理：检查引擎文件、权限和安全软件。");
+   running[id]=p;errors.Remove(id);Record(id,"启动 FRP 进程，等待连接结果。");
+   void Output(string? line){if(line==null)return;var safe=line.Replace(secret,"[REDACTED]",StringComparison.Ordinal);safe=System.Text.RegularExpressions.Regex.Replace(safe,@"(?i)(token|password|authorization|secret)([\s:=]+)[^\s,;]+","$1$2[REDACTED]");Record(id,safe);}
+   p.OutputDataReceived+=(_,e)=>Output(e.Data);p.ErrorDataReceived+=(_,e)=>Output(e.Data);
+   p.EnableRaisingEvents=true;p.Exited+=(_,_)=>{lock(gate){if(running.TryGetValue(id,out var current)&&ReferenceEquals(current,p))try{Record(id,$"FRP 进程退出（退出码 {p.ExitCode}）。处理：查看下方 FRP 输出，检查网络、节点在线状态、官网凭据及本地服务；开机连接仍在重试时会显示倒计时。",true);}catch(ObjectDisposedException){}}};
+   p.BeginOutputReadLine();p.BeginErrorReadLine();traffic.Register(p.Id,id,tunnel.LocalAddress);return true;
+  }catch(Exception ex){Record(id,"启动失败："+ex.Message,true);return false;}}
  }
+
  bool Stop(string id){startup?.Cancel(id);lock(gate){if(!running.Remove(id,out var p))return false;traffic.Unregister(p.Id);try{if(!p.HasExited){p.Kill(entireProcessTree:true);p.WaitForExit(5000);}}catch{}p.Dispose();return true;}}
  public override async Task StopAsync(CancellationToken ct){await base.StopAsync(ct);foreach(var id in running.Keys.ToArray())Stop(id);traffic.Dispose();}
 }
