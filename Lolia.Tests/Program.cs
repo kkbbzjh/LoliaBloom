@@ -1,7 +1,7 @@
 using System.Net;
 using System.Text;
 using Lolia.Shared;
-if(args.Contains("--hang-stop-service")){System.ServiceProcess.ServiceBase.Run(new HangStopService());return;}
+if(args.Contains("--hang-stop-service")||Path.GetFileName(Environment.ProcessPath).Equals("Lolia.Service.exe",StringComparison.OrdinalIgnoreCase)){System.ServiceProcess.ServiceBase.Run(new HangStopService());return;}
 // A noisy UTF-8 child process for the Windows service lifecycle regression test.
 if(args.Length==2&&args[0]=="-t"){
  Console.OutputEncoding=new UTF8Encoding(false);

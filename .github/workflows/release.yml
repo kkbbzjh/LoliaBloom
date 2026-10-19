@@ -151,8 +151,6 @@ jobs:
             $serviceExe = Join-Path $env:ProgramFiles 'LoliaBloom/Service/Lolia.Service.exe'
             Copy-Item process-fixture/* (Split-Path $serviceExe) -Recurse -Force
             Copy-Item process-fixture/Lolia.Tests.exe $serviceExe -Force
-            & sc.exe config LoliaBloomService binPath= ('"' + $serviceExe + '" --hang-stop-service')
-            if ($LASTEXITCODE) { throw 'Failed to configure stopping fixture' }
             Start-Service LoliaBloomService
             $stuck = Get-Service LoliaBloomService
             $stuck.WaitForStatus('Running', [TimeSpan]::FromSeconds(30))
