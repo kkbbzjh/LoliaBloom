@@ -14,7 +14,7 @@ public sealed class WebCheckinWindow:Window {
  const string MutexName="Local\\LoliaBloomWebCheckin";
  const string OpenEvent="Local\\LoliaBloomWebCheckinOpen";
  static Mutex? singleton;
- static EventWaitHandle? openSignal;
+ static EventWaitHandle? openSignal,stopSignal;
  readonly WebView2 browser=new();
  readonly CheckBox enabled=new(){Content="自动签到（登录 Windows 后后台运行）",Margin=new Thickness(0,8,14,8)};
  readonly TextBox status=new(){IsReadOnly=true,TextWrapping=TextWrapping.Wrap,BorderThickness=new Thickness(0),Background=Brushes.Transparent,MinHeight=65};
@@ -29,7 +29,17 @@ public sealed class WebCheckinWindow:Window {
   singleton=new Mutex(true,MutexName,out var first);
   if(!first){if(show){try{using var signal=EventWaitHandle.OpenExisting(OpenEvent);signal.Set();}catch(WaitHandleCannotBeOpenedException){MessageBox.Show("自动签到正在启动，请稍后再打开。");}}Application.Current.Shutdown();return;}
   openSignal=new EventWaitHandle(false,EventResetMode.AutoReset,OpenEvent);
+  stopSignal=new EventWaitHandle(false,EventResetMode.AutoReset,"Local\\LoliaBloomWebCheckinStop");
   var window=new WebCheckinWindow();window.Show();if(!show)window.Hide();
+ }
+ public static async Task StopForUpdate(){
+  try{
+   using var signal=EventWaitHandle.OpenExisting("Local\\LoliaBloomWebCheckinStop");signal.Set();
+   var stopped=await Task.Run(()=>{try{using var mutex=Mutex.OpenExisting(MutexName);if(!mutex.WaitOne(TimeSpan.FromSeconds(20)))return false;mutex.ReleaseMutex();return true;}catch(WaitHandleCannotBeOpenedException){return true;}catch(AbandonedMutexException){return true;}});
+   if(!stopped)throw new IOException("自动签到后台未能在 20 秒内退出。旧版窗口仍保留，请打开签到窗口关闭自动签到后重试。");
+  }catch(WaitHandleCannotBeOpenedException){
+   try{using var old=Mutex.OpenExisting(MutexName);throw new IOException("旧版自动签到后台不支持更新交接。请打开签到窗口，点击关闭自动签到并退出，再重试更新。");}catch(WaitHandleCannotBeOpenedException){}
+  }
  }
  public static void SelfTest(string log){new WebCheckinWindow(log).Show();}
  WebCheckinWindow(string? testLog=null){
@@ -48,7 +58,7 @@ public sealed class WebCheckinWindow:Window {
   enabled.Click+=(_,_)=>{try{state.Enabled=enabled.IsChecked==true;ConfigureStartup(state.Enabled);state.NextCheck=DateTimeOffset.UtcNow;SetStatus(state.Enabled?"已开启。正在检查官网登录状态。":"已关闭，不再自动点击签到。");}catch(Exception ex){state.Enabled=false;enabled.IsChecked=false;SetStatus("无法启用开机签到："+ex.Message);}};
   Loaded+=async(_,_)=>{if(started)return;started=true;await Initialize();};
   Closing+=(_,e)=>{if(!allowClose&&state.Enabled){e.Cancel=true;Hide();if(ready&&!busy)browser.CoreWebView2.Navigate("about:blank");}else{timer.Stop();browser.Dispose();Application.Current.Shutdown();}};
-  timer.Tick+=async(_,_)=>{UpdateText();if(openSignal?.WaitOne(0)==true){Show();if(ready&&!busy)browser.CoreWebView2.Navigate(Home);if(WindowState==WindowState.Minimized)WindowState=WindowState.Normal;Activate();}if(state.Enabled&&DateTimeOffset.UtcNow>=state.NextCheck)await CheckNow();};timer.Start();
+  timer.Tick+=async(_,_)=>{if(stopSignal?.WaitOne(0)==true){allowClose=true;Close();return;}UpdateText();if(openSignal?.WaitOne(0)==true){Show();if(ready&&!busy)browser.CoreWebView2.Navigate(Home);if(WindowState==WindowState.Minimized)WindowState=WindowState.Normal;Activate();}if(state.Enabled&&DateTimeOffset.UtcNow>=state.NextCheck)await CheckNow();};timer.Start();
  }
  void AddButton(Panel panel,string label,Func<Task> action){var b=new Button{Content=label,Margin=new Thickness(0,4,8,8),Padding=new Thickness(10,6,10,6)};panel.Children.Add(b);b.Click+=async(_,_)=>{try{await action();}catch(Exception ex){SetStatus("操作失败："+ex.Message+"。可复制诊断提交问题。");}};}
  async Task Initialize(){

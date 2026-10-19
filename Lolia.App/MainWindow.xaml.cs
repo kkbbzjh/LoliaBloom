@@ -32,8 +32,8 @@ public partial class MainWindow:ChromeWindow {
  readonly HashSet<string> autoPending=new();
  string? notice;DateTimeOffset noticeUntil;
  public MainWindow(){
-  InitializeComponent();try{WebCheckinWindow.ResumeIfEnabled();}catch(Exception ex){CheckinStatus.Text="后台签到启动失败："+ex.Message;}AppVersion.Text="v"+(typeof(MainWindow).Assembly.GetName().Version?.ToString(3)??"未知");UploadChart.LineBrush=new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(133,101,165));api=new LoliaApi(http,GetAccessToken);
-  Loaded+=async(_,_)=>{if(session!=null)await Safe(Sync);else await Refresh();poller.Tick+=async(_,_)=>await Refresh();poller.Start();};Closed+=(_,_)=>{poller.Stop();details?.Close();};
+  InitializeComponent();AppVersion.Text="v"+(typeof(MainWindow).Assembly.GetName().Version?.ToString(3)??"未知");UploadChart.LineBrush=new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(133,101,165));api=new LoliaApi(http,GetAccessToken);
+  Loaded+=async(_,_)=>{_=CompleteUpdateHandoff();_=CheckAppUpdate(false);if(session!=null)await Safe(Sync);else await Refresh();poller.Tick+=async(_,_)=>await Refresh();poller.Start();};Closed+=(_,_)=>{poller.Stop();details?.Close();};
  }
  async Task<string> GetAccessToken(){
   await authGate.WaitAsync();
@@ -181,7 +181,7 @@ public partial class MainWindow:ChromeWindow {
   }finally{signingIn=false;}
  }
  protected override void OnContentRendered(EventArgs e){
-  base.OnContentRendered(e);var args=Environment.GetCommandLineArgs();
+  base.OnContentRendered(e);SignalUpdateReady();var args=Environment.GetCommandLineArgs();
   var createIndex=Array.IndexOf(args,"--create-screenshot");
   if(createIndex>=0&&createIndex+1<args.Length){
    var nodes=new List<CloudNode>{new(1,"广州 · 精品线路（示例）","online",new[]{"tcp","udp","http","https"},false,true,"CN"),new(2,"香港 · 轻盈节点（示例）","online",new[]{"tcp","udp","http","https"},false,false,"HK"),new(3,"东京 · 备用节点（示例）","offline",new[]{"tcp","udp"},true,false,"JP")};

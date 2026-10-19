@@ -20,6 +20,8 @@
 
 ## 功能特色
 
+- **软件内更新（Windows）**：自动检查正式版，点击后下载、校验 SHA256 并启动新版；显示进度、支持取消，新版确认窗口就绪后退出旧版，保留登录、隧道设置和签到计时。
+
 - **精致工作台**：自定义标题栏、节点卡片、名称与地区筛选、在线状态筛选，以及访问地址一键复制。
 
 - **FRP 独立更新**：获取官方版本、校验 SHA256、恢复运行中的隧道，失败自动回退。
@@ -46,12 +48,12 @@
 
 #### 单文件版（推荐）
 
-1. 打开 [GitHub Releases 下载页](https://github.com/kkbbzjh/LoliaBloom/releases/latest)，下载 `LoliaBloom-v0.7.11-win-x64.exe`。
+1. 打开 [GitHub Releases 下载页](https://github.com/kkbbzjh/LoliaBloom/releases/latest)，下载 `LoliaBloom-v0.7.12-win-x64.exe`。
 2. 双击运行即可，不需要单独安装 .NET。
 
 #### ZIP 版
 
-也可以下载 `LoliaBloom-v0.7.11-win-x64.zip`，解压后运行其中的 `Lolia.App.exe`。
+也可以下载 `LoliaBloom-v0.7.12-win-x64.zip`，解压后运行其中的 `Lolia.App.exe`。
 
 #### 安装后台服务
 

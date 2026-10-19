@@ -5,6 +5,11 @@ using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 
 try {
+ var updated=Lolia.Shared.AppUpdateReceipt.FindNewer(Assembly.GetExecutingAssembly().GetName().Version!);
+ if(updated!=null&&!args.Contains("--self-test")){
+  var forward=new ProcessStartInfo(updated){UseShellExecute=false};foreach(var arg in args)forward.ArgumentList.Add(arg);Process.Start(forward)?.Dispose();return 0;
+ }
+
  using var payload=Assembly.GetExecutingAssembly().GetManifestResourceStream("LoliaBloom.Payload")??throw new Exception("程序运行文件缺失");
  var hash=Convert.ToHexString(SHA256.HashData(payload));payload.Position=0;
  var root=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"LoliaBloom","versions");

@@ -20,6 +20,8 @@ Screenshots are rendered by the Windows client using example tunnels and traffic
 
 ## Features
 
+- **In-app updates (Windows)**: automatically check official GitHub Releases; download, verify SHA256 and restart on click, with progress and cancellation. The old window stays open until the new version confirms startup.
+
 - **Refined workspace** — custom title bar, searchable node cards, region and online filters, and one-click address copying.
 
 - **Independent FRP updates** — download official releases, verify SHA256, restore running tunnels and roll back on failure.
@@ -46,12 +48,12 @@ Screenshots are rendered by the Windows client using example tunnels and traffic
 
 #### Single EXE (recommended)
 
-1. Open [GitHub Releases](https://github.com/kkbbzjh/LoliaBloom/releases/latest) and download `LoliaBloom-v0.7.11-win-x64.exe`.
+1. Open [GitHub Releases](https://github.com/kkbbzjh/LoliaBloom/releases/latest) and download `LoliaBloom-v0.7.12-win-x64.exe`.
 2. Double-click to run. No separate .NET installation is required.
 
 #### ZIP version
 
-Alternatively, download `LoliaBloom-v0.7.11-win-x64.zip`, extract it, and run `Lolia.App.exe`.
+Alternatively, download `LoliaBloom-v0.7.12-win-x64.zip`, extract it, and run `Lolia.App.exe`.
 
 #### Install the background service
 

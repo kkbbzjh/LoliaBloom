@@ -2,12 +2,35 @@ using System.Net;
 using System.Text;
 using Lolia.Shared;
 if(args.Contains("--hang-stop-service")||File.Exists(Path.Combine(AppContext.BaseDirectory,"hang-stop.fixture"))){HangStopService.Run();return;}
+if(args.Length==2&&args[0]=="--update-launch-test"){
+ using var timeout=new CancellationTokenSource(TimeSpan.FromSeconds(120));bool handed=false;
+ await Lolia.App.AppUpdater.LaunchAndWait(args[1],()=>{handed=true;return Task.CompletedTask;},timeout.Token,true);
+ if(!handed)throw new Exception("new window did not confirm startup");Console.WriteLine("PASS: real single-file startup, ready signal and accepted update handoff");return;
+}
 // A noisy UTF-8 child process for the Windows service lifecycle regression test.
 if(args.Length==2&&args[0]=="-t"){
  Console.OutputEncoding=new UTF8Encoding(false);
  while(true){Console.WriteLine("中文连接日志：本地服务尚未启动");Console.Error.WriteLine("connect to local service [127.0.0.1:6789] error: connection refused");Thread.Sleep(10);}
 }
 void Assert(bool b,string msg){if(!b)throw new Exception(msg);}
+// Exercise the real update manifest parser and streaming downloader with a fake transport.
+var updateBytes=Encoding.UTF8.GetBytes(new string('x',2048));
+var updateHash=Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(updateBytes)).ToLowerInvariant();
+string Manifest(string digest,string tag="v99.1.0",bool prerelease=false)=>System.Text.Json.JsonSerializer.Serialize(new {draft=false,prerelease,tag_name=tag,body="test release",assets=new[]{new {name="LoliaBloom-"+tag+"-win-x64.exe",state="uploaded",size=updateBytes.Length,digest="sha256:"+digest,browser_download_url="https://github.com/kkbbzjh/LoliaBloom/releases/download/"+tag+"/LoliaBloom-"+tag+"-win-x64.exe"}}});
+var updateRelease=Lolia.App.AppUpdater.Parse(Manifest(updateHash),new Version(0,7,12))!;
+Assert(updateRelease!=null,"update manifest not detected");
+Assert(Lolia.App.AppUpdater.Parse(Manifest(updateHash),new Version(99,1,0))==null,"equal update offered");
+Assert(Lolia.App.AppUpdater.Parse(Manifest(updateHash,prerelease:true),new Version(0,7,12))==null,"prerelease offered automatically");
+try{Lolia.App.AppUpdater.Parse(Manifest(updateHash).Replace("https://github.com/","https://other.example/"),new Version(0,7,12));throw new Exception("foreign update URL accepted");}catch(IOException){}
+using(var updateHttp=new HttpClient(new Fake(_=>Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK){Content=new ByteArrayContent(updateBytes)})))){
+ var updater=new Lolia.App.AppUpdater(updateHttp);
+ var downloaded=await updater.Download(updateRelease,new Progress<int>(),CancellationToken.None);
+ Assert(File.ReadAllBytes(downloaded).SequenceEqual(updateBytes),"verified update bytes changed");File.Delete(downloaded);
+ try{await updater.Download(updateRelease with {Sha256=new string('0',64)},new Progress<int>(),CancellationToken.None);throw new Exception("corrupt update accepted");}catch(IOException){}
+ Assert(!Directory.GetFiles(Path.GetDirectoryName(downloaded)!,"*.partial").Any(),"failed update retained partial file");
+ using var cancel=new CancellationTokenSource();cancel.Cancel();try{await updater.Download(updateRelease,new Progress<int>(),cancel.Token);throw new Exception("cancelled update completed");}catch(OperationCanceledException){}
+}
+Console.WriteLine("PASS: update versions, prerelease exclusion, official URL, SHA256 verification, corrupt download cleanup and cancellation");
 var bootTime=DateTimeOffset.UtcNow;
 var bootEnabled=new HashSet<string>{"a","b"};var bootRunning=new HashSet<string>();var bootAttempts=new List<string>();
 var boot=new StartupConnections(new[]{"a","b"});
