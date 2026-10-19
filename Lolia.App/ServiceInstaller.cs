@@ -35,22 +35,9 @@ internal static class ServiceInstaller {
    var version=File.Exists(versionFile)?File.ReadAllText(versionFile).Trim().TrimStart('v'):"";
    bool keep=Version.TryParse(version,out var parsed)&&parsed>=new Version(0,71,2)&&File.Exists(Path.Combine(engine,"frpc.exe"));
    if(!keep){var bundled=Path.Combine(AppContext.BaseDirectory,"frpc.exe");if(!File.Exists(bundled))throw new FileNotFoundException("内置 FRP 文件缺失，请重新下载发布包。",bundled);File.Copy(bundled,Path.Combine(engine,"frpc.exe"),true);File.WriteAllText(versionFile,"v0.71.2",Encoding.ASCII);}
-   async Task Sc(params string[] arguments){
-    var start=new ProcessStartInfo(Path.Combine(Environment.SystemDirectory,"sc.exe")){UseShellExecute=false,CreateNoWindow=true,RedirectStandardOutput=true,RedirectStandardError=true};
-    foreach(var argument in arguments)start.ArgumentList.Add(argument);
-    using var process=Process.Start(start)??throw new Exception("无法启动 Windows 服务管理工具。");
-    var stdout=process.StandardOutput.ReadToEndAsync();var stderr=process.StandardError.ReadToEndAsync();
-    using var timeout=new CancellationTokenSource(TimeSpan.FromSeconds(30));await process.WaitForExitAsync(timeout.Token);
-    Log((await stdout+await stderr).Trim());if(process.ExitCode!=0){
-     var action=process.ExitCode switch{5=>"请确认管理员授权；检查安全软件是否阻止服务注册。",1072=>"服务正等待删除。请关闭 Windows 服务管理窗口和旧客户端；仍失败时重启电脑后重试。",1053=>"服务启动超时。请检查服务文件是否完整，并提交本日志。",87=>"服务参数无效，请提交本日志和版本号。",_=>"请复制完整日志提交 BUG，不要反复盲目重试。"};
-     throw new Exception($"Windows 服务配置失败，错误码 {process.ExitCode}：{new System.ComponentModel.Win32Exception(process.ExitCode).Message}。{action}");
-    }
-   }
-   Log("注册开机自动启动和故障恢复…");
+   Log("直接配置 Windows 服务路径、自动启动和故障恢复…");
    var binary="\""+Path.Combine(target,"Service","Lolia.Service.exe")+"\"";
-   if(service==null)await Sc("create",ServiceName,"binPath=",binary,"start=","auto","DisplayName=","Lolia Bloom Service");
-   else await Sc("config",ServiceName,"binPath=",binary,"start=","auto");
-   await Sc("failure",ServiceName,"reset=","86400","actions=","restart/5000/restart/15000/restart/60000");
+   ServiceRegistration.Configure(ServiceName,binary,Log);
    Log("启动后台服务…");
    using var installed=new ServiceController(ServiceName);installed.Start();await Task.Run(()=>installed.WaitForStatus(ServiceControllerStatus.Running,TimeSpan.FromSeconds(30)));
    Log("验证后台服务连接…");
