@@ -42,11 +42,13 @@ public partial class MainWindow {
   var release=availableRelease;using var cancellation=new CancellationTokenSource(TimeSpan.FromMinutes(20));updateCancellation=cancellation;AppUpdateButton.Content="取消下载";
   try{
    var progress=new Progress<int>(p=>AppUpdateStatus.Text="下载 "+release.Tag+" · "+p+"%");
-   var file=await new AppUpdater(updateHttp).Download(release,progress,cancellation.Token);
+   var folder=Path.GetDirectoryName(AppUpdater.CurrentExecutable)!;
+   var file=await new AppUpdater(updateHttp).Download(release,folder,progress,cancellation.Token);
    cancellation.Token.ThrowIfCancellationRequested();AppUpdateButton.IsEnabled=false;AppUpdateStatus.Text="校验通过，等待新版启动…";
-   await AppUpdater.LaunchAndWait(file,async()=>{AppUpdateReceipt.Save(release.Tag,file,release.Sha256);await WebCheckinWindow.StopForUpdate();},cancellation.Token);
+   await AppUpdater.LaunchAndWait(file,WebCheckinWindow.StopForUpdate,cancellation.Token);
    Application.Current.Shutdown();
   }catch(OperationCanceledException){AppUpdateStatus.Text="下载已取消或超时，可重新尝试";}
+  catch(UnauthorizedAccessException ex){AppUpdateStatus.Text="当前目录无法写入";ShowDiagnostics("无法把新版下载到程序旁边","当前程序目录没有写入权限。请把单文件 EXE 移到桌面等可写入目录后重试。\n"+ex);}
   catch(Exception ex){AppUpdateStatus.Text="更新未完成，旧版仍可使用";ShowDiagnostics("软件更新失败",ex.ToString());try{WebCheckinWindow.ResumeIfEnabled();}catch{}}
   finally{updateCancellation=null;AppUpdateButton.IsEnabled=true;AppUpdateButton.Content="下载并更新 "+release.Tag;}
  }

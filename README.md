@@ -20,7 +20,7 @@ Screenshots are rendered by the Windows client using example tunnels and traffic
 
 ## Features
 
-- **In-app updates (Windows)**: automatically check official GitHub Releases; download, verify SHA256 and restart on click, with progress and cancellation. The old window stays open until the new version confirms startup.
+- **In-app updates (Windows)**: automatically check official GitHub Releases; download, verify SHA256 and restart on click, with progress and cancellation; the new EXE is saved beside the running portable EXE. The old window stays open until the new version confirms startup.
 
 - **Refined workspace** — custom title bar, searchable node cards, region and online filters, and one-click address copying.
 

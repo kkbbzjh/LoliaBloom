@@ -5,11 +5,6 @@ using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 
 try {
- var updated=Lolia.Shared.AppUpdateReceipt.FindNewer(Assembly.GetExecutingAssembly().GetName().Version!);
- if(updated!=null&&!args.Contains("--self-test")){
-  var forward=new ProcessStartInfo(updated){UseShellExecute=false};foreach(var arg in args)forward.ArgumentList.Add(arg);Process.Start(forward)?.Dispose();return 0;
- }
-
  using var payload=Assembly.GetExecutingAssembly().GetManifestResourceStream("LoliaBloom.Payload")??throw new Exception("程序运行文件缺失");
  var hash=Convert.ToHexString(SHA256.HashData(payload));payload.Position=0;
  var root=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"LoliaBloom","versions");
@@ -40,6 +35,7 @@ try {
  var executable=Path.Combine(target,"Lolia.App.exe");
  if(!File.Exists(executable))throw new Exception("主程序缺失，请重新下载");
  var launch=new ProcessStartInfo(executable){UseShellExecute=false,WorkingDirectory=target};
+ launch.Environment["LOLIABLOOM_LAUNCHER_PATH"]=Environment.ProcessPath!;
  foreach(var arg in args.Where(a=>a!="--self-test"))launch.ArgumentList.Add(arg);
  using var app=Process.Start(launch)??throw new Exception("无法启动洛链绽放");
  if(args.Contains("--self-test")){using var timeout=new CancellationTokenSource(TimeSpan.FromSeconds(45));await app.WaitForExitAsync(timeout.Token);return app.ExitCode;}

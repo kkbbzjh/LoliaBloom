@@ -1,5 +1,4 @@
 <Project Sdk="Microsoft.NET.Sdk">
 <PropertyGroup><OutputType>WinExe</OutputType><TargetFramework>net10.0-windows</TargetFramework><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable><ApplicationIcon>../Lolia.App/Assets/logo.ico</ApplicationIcon><AssemblyName>LoliaBloom</AssemblyName></PropertyGroup>
-<ItemGroup><Compile Include="../Lolia.Shared/AppUpdateReceipt.cs" Link="AppUpdateReceipt.cs"/></ItemGroup>
 <ItemGroup><EmbeddedResource Include="../payload.zip" LogicalName="LoliaBloom.Payload" /></ItemGroup>
 </Project>

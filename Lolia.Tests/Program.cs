@@ -23,12 +23,14 @@ Assert(Lolia.App.AppUpdater.Parse(Manifest(updateHash),new Version(99,1,0))==nul
 Assert(Lolia.App.AppUpdater.Parse(Manifest(updateHash,prerelease:true),new Version(0,7,12))==null,"prerelease offered automatically");
 try{Lolia.App.AppUpdater.Parse(Manifest(updateHash).Replace("https://github.com/","https://other.example/"),new Version(0,7,12));throw new Exception("foreign update URL accepted");}catch(IOException){}
 using(var updateHttp=new HttpClient(new Fake(_=>Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK){Content=new ByteArrayContent(updateBytes)})))){
- var updater=new Lolia.App.AppUpdater(updateHttp);
- var downloaded=await updater.Download(updateRelease,new Progress<int>(),CancellationToken.None);
+ var updater=new Lolia.App.AppUpdater(updateHttp);var updateFolder=Path.Combine(Path.GetTempPath(),"LoliaBloom-update-test-"+Guid.NewGuid().ToString("N"));
+ var downloaded=await updater.Download(updateRelease,updateFolder,new Progress<int>(),CancellationToken.None);
+ Assert(Path.GetDirectoryName(downloaded)==updateFolder,"update did not use requested adjacent directory");
  Assert(File.ReadAllBytes(downloaded).SequenceEqual(updateBytes),"verified update bytes changed");File.Delete(downloaded);
- try{await updater.Download(updateRelease with {Sha256=new string('0',64)},new Progress<int>(),CancellationToken.None);throw new Exception("corrupt update accepted");}catch(IOException){}
+ try{await updater.Download(updateRelease with {Sha256=new string('0',64)},updateFolder,new Progress<int>(),CancellationToken.None);throw new Exception("corrupt update accepted");}catch(IOException){}
  Assert(!Directory.GetFiles(Path.GetDirectoryName(downloaded)!,"*.partial").Any(),"failed update retained partial file");
- using var cancel=new CancellationTokenSource();cancel.Cancel();try{await updater.Download(updateRelease,new Progress<int>(),cancel.Token);throw new Exception("cancelled update completed");}catch(OperationCanceledException){}
+ using var cancel=new CancellationTokenSource();cancel.Cancel();try{await updater.Download(updateRelease,updateFolder,new Progress<int>(),cancel.Token);throw new Exception("cancelled update completed");}catch(OperationCanceledException){}
+ Directory.Delete(updateFolder,true);
 }
 Console.WriteLine("PASS: update versions, prerelease exclusion, official URL, SHA256 verification, corrupt download cleanup and cancellation");
 var bootTime=DateTimeOffset.UtcNow;

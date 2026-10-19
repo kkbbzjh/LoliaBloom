@@ -13,10 +13,6 @@ public partial class App:Application {
   if(e.Args.Contains("--checkin-worker")||e.Args.Contains("--checkin-open")){
    ShutdownMode=ShutdownMode.OnExplicitShutdown;base.OnStartup(e);WebCheckinWindow.StartWorker(e.Args.Contains("--checkin-open"));return;
   }
-  var newer=Lolia.Shared.AppUpdateReceipt.FindNewer(typeof(App).Assembly.GetName().Version!);
-  if(newer!=null&&!e.Args.Any(a=>a.Contains("screenshot")||a=="--self-test")){
-   var forward=new System.Diagnostics.ProcessStartInfo(newer){UseShellExecute=false};foreach(var arg in e.Args)forward.ArgumentList.Add(arg);System.Diagnostics.Process.Start(forward)?.Dispose();Shutdown();return;
-  }
   base.OnStartup(e);new MainWindow().Show();
  }
 }

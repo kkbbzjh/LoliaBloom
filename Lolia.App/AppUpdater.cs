@@ -30,8 +30,9 @@ public sealed class AppUpdater {
   using var request=new HttpRequestMessage(HttpMethod.Get,"https://api.github.com/repos/"+Repository+"/releases/latest");request.Headers.UserAgent.ParseAdd("LoliaBloom/"+current.ToString(3));request.Headers.Accept.ParseAdd("application/vnd.github+json");
   using var response=await http.SendAsync(request,ct);if(response.StatusCode==System.Net.HttpStatusCode.Forbidden||response.StatusCode==System.Net.HttpStatusCode.TooManyRequests)throw new IOException("GitHub 暂时限制检查频率，请稍后重试。");response.EnsureSuccessStatusCode();return Parse(await response.Content.ReadAsStringAsync(ct),current);
  }
- public async Task<string> Download(AppRelease release,IProgress<int> progress,CancellationToken ct){
-  var folder=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"LoliaBloom","updates",release.Tag);Directory.CreateDirectory(folder);
+ public static string CurrentExecutable=>Environment.GetEnvironmentVariable("LOLIABLOOM_LAUNCHER_PATH") is {} outer&&File.Exists(outer)?Path.GetFullPath(outer):Environment.ProcessPath!;
+ public async Task<string> Download(AppRelease release,string folder,IProgress<int> progress,CancellationToken ct){
+  Directory.CreateDirectory(folder);
   var file=Path.Combine(folder,"LoliaBloom-"+release.Tag+"-win-x64.exe");var part=file+"."+Guid.NewGuid().ToString("N")+".partial";
   try{
    using var request=new HttpRequestMessage(HttpMethod.Get,release.Download);request.Headers.UserAgent.ParseAdd("LoliaBloom-Updater");
