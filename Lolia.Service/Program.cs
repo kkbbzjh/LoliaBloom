@@ -107,7 +107,7 @@ sealed class Manager:BackgroundService {
    running[id]=p;errors.Remove(id);Record(id,"启动 FRP 进程，等待连接结果。");
    void Output(string? line){if(line==null)return;var safe=line.Replace(secret,"[REDACTED]",StringComparison.Ordinal);safe=System.Text.RegularExpressions.Regex.Replace(safe,@"(?i)(token|password|authorization|secret)([\s:=]+)[^\s,;]+","$1$2[REDACTED]");Record(id,safe);}
    p.OutputDataReceived+=(_,e)=>Output(e.Data);p.ErrorDataReceived+=(_,e)=>Output(e.Data);
-   p.EnableRaisingEvents=true;p.Exited+=(_,_)=>{lock(gate){if(running.TryGetValue(id,out var current)&&ReferenceEquals(current,p))try{Record(id,$"FRP 进程退出（退出码 {p.ExitCode}）。处理：查看下方 FRP 输出，检查网络、节点在线状态、官网凭据及本地服务；开机连接仍在重试时会显示倒计时。",true);}catch(ObjectDisposedException){}}};
+   p.Exited+=(_,_)=>{lock(gate){if(running.TryGetValue(id,out var current)&&ReferenceEquals(current,p))try{Record(id,$"FRP 进程退出（退出码 {p.ExitCode}）。处理：查看下方 FRP 输出，检查网络、节点在线状态、官网凭据及本地服务；开机连接仍在重试时会显示倒计时。",true);}catch(ObjectDisposedException){}}};p.EnableRaisingEvents=true;
    p.BeginOutputReadLine();p.BeginErrorReadLine();traffic.Register(p.Id,id,tunnel.LocalAddress);return true;
   }catch(Exception ex){Record(id,"启动失败："+ex.Message,true);return false;}}
  }
