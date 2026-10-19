@@ -47,8 +47,8 @@ public sealed class WebCheckinWindow:Window {
   header.Children.Add(status);root.Children.Add(browser);UpdateText();
   enabled.Click+=(_,_)=>{try{state.Enabled=enabled.IsChecked==true;ConfigureStartup(state.Enabled);state.NextCheck=DateTimeOffset.UtcNow;SetStatus(state.Enabled?"已开启。正在检查官网登录状态。":"已关闭，不再自动点击签到。");}catch(Exception ex){state.Enabled=false;enabled.IsChecked=false;SetStatus("无法启用开机签到："+ex.Message);}};
   Loaded+=async(_,_)=>{if(started)return;started=true;await Initialize();};
-  Closing+=(_,e)=>{if(!allowClose&&state.Enabled){e.Cancel=true;Hide();}else{timer.Stop();browser.Dispose();Application.Current.Shutdown();}};
-  timer.Tick+=async(_,_)=>{UpdateText();if(openSignal?.WaitOne(0)==true){Show();if(WindowState==WindowState.Minimized)WindowState=WindowState.Normal;Activate();}if(state.Enabled&&DateTimeOffset.UtcNow>=state.NextCheck)await CheckNow();};timer.Start();
+  Closing+=(_,e)=>{if(!allowClose&&state.Enabled){e.Cancel=true;Hide();if(ready&&!busy)browser.CoreWebView2.Navigate("about:blank");}else{timer.Stop();browser.Dispose();Application.Current.Shutdown();}};
+  timer.Tick+=async(_,_)=>{UpdateText();if(openSignal?.WaitOne(0)==true){Show();if(ready&&!busy)browser.CoreWebView2.Navigate(Home);if(WindowState==WindowState.Minimized)WindowState=WindowState.Normal;Activate();}if(state.Enabled&&DateTimeOffset.UtcNow>=state.NextCheck)await CheckNow();};timer.Start();
  }
  void AddButton(Panel panel,string label,Func<Task> action){var b=new Button{Content=label,Margin=new Thickness(0,4,8,8),Padding=new Thickness(10,6,10,6)};panel.Children.Add(b);b.Click+=async(_,_)=>{try{await action();}catch(Exception ex){SetStatus("操作失败："+ex.Message+"。可复制诊断提交问题。");}};}
  async Task Initialize(){
@@ -70,7 +70,7 @@ public sealed class WebCheckinWindow:Window {
      if(lastResult.Value.Ok){state.LastSuccess=DateTimeOffset.UtcNow;state.NextCheck=state.LastSuccess.Value.AddHours(24).AddSeconds(30);SetStatus("签到成功"+(gb!=null?"，获得 "+gb+" GB 流量。":"。"));}
     }catch{lastResult=(false,e.Response.StatusCode,null);}
    };
-   ready=true;if(testLog!=null){await RunSelfTest();return;}browser.Source=new Uri(Home);if(state.Enabled)ConfigureStartup(true);
+   ready=true;if(testLog!=null){await RunSelfTest();return;}browser.Source=new Uri(IsVisible?Home:"about:blank");if(state.Enabled)ConfigureStartup(true);
   }catch(Exception ex){SetStatus("浏览器初始化失败："+ex.Message+"。请安装 Microsoft Edge WebView2 Runtime 后重新打开签到窗口。");ready=false;if(testLog!=null){File.WriteAllText(testLog,ex.ToString());Application.Current.Shutdown(1);}}
  }
  async Task RunSelfTest(){
@@ -93,10 +93,13 @@ public sealed class WebCheckinWindow:Window {
   try{
    await CheckNow();Require(posts==0&&state.Status.Contains("现在可以签到"),"disabled switch clicked check-in");
    state.Enabled=true;await CheckNow();Require(posts==1&&state.LastSuccess!=null&&state.NextCheck>DateTimeOffset.UtcNow.AddHours(23),"success not confirmed or 24h schedule missing");
-   var success=state.LastSuccess;scenario="checked";await CheckNow();Require(posts==1&&state.LastSuccess==success&&state.Status.Contains("官网显示已签到"),"already signed submitted again");
+   var restored=JsonSerializer.Deserialize<WebCheckinSettings>(JsonSerializer.Serialize(state))!;
+   Require(restored.LastSuccess==state.LastSuccess&&restored.NextCheck==state.NextCheck&&restored.Countdown().Length>0,"countdown did not survive settings round-trip");
+   var success=state.LastSuccess;await CheckNow();Require(posts==1&&state.LastSuccess==success&&state.Status.Contains("尚未满 24"),"manual check bypassed cooldown");
+   scenario="checked";await CheckNow();Require(posts==1&&state.LastSuccess==success&&state.Status.Contains("官网显示已签到"),"already signed submitted again");
    scenario="login";await CheckNow();Require(posts==1&&state.Status.Contains("登录官网"),"expired login not detected");
-   scenario="rejected";await CheckNow();Require(posts==2&&state.LastSuccess==success&&state.Status.Contains("403"),"HTTP rejection reported as success");
-   File.WriteAllText(testLog!,"PASS: disabled switch, confirmed success, 24-hour schedule, already signed, expired login and HTTP rejection. Synthetic official-origin pages; no real account used.");Application.Current.Shutdown(0);
+   scenario="rejected";state.LastSuccess=success!.Value.AddHours(-25);var oldSuccess=state.LastSuccess;await CheckNow();Require(posts==2&&state.LastSuccess==oldSuccess&&state.Status.Contains("403"),"HTTP rejection reported as success");
+   File.WriteAllText(testLog!,"PASS: disabled switch, confirmed success, 24-hour schedule and persistence, cooldown protection, already signed, expired login and HTTP rejection. Synthetic official-origin pages; no real account used.");Application.Current.Shutdown(0);
   }catch(Exception ex){File.WriteAllText(testLog!,ex.ToString());Application.Current.Shutdown(1);}
  }
  static void ConfigureStartup(bool on){using var key=Registry.CurrentUser.CreateSubKey(@"Software\Microsoft\Windows\CurrentVersion\Run");if(on)key.SetValue("LoliaBloomWebCheckin","\""+Environment.ProcessPath+"\" --checkin-worker");else key.DeleteValue("LoliaBloomWebCheckin",false);}
@@ -137,6 +140,7 @@ public sealed class WebCheckinWindow:Window {
     if(kind=="foreign"){SetStatus("当前不是官网页面，已暂停自动点击。请重新打开官网。");return;}
     if(kind=="checked"&&!clicked){if(state.LastSuccess is {} known&&known.AddHours(24).AddSeconds(30)>DateTimeOffset.UtcNow)state.NextCheck=known.AddHours(24).AddSeconds(30);SetStatus("官网显示已签到，30 分钟后复查可签到状态。");return;}
     if(kind=="available"&&!clicked){
+     if(state.LastSuccess is {} previous&&previous.AddHours(24)>DateTimeOffset.UtcNow){state.NextCheck=previous.AddHours(24).AddSeconds(30);SetStatus("距上次成功尚未满 24 小时，继续倒计时。");return;}
      if(!state.Enabled){SetStatus("现在可以签到。开启上方自动签到开关后，才会自动点击。");return;}
      clicked=true;SetStatus("已点击签到，正在等待官网确认…");
      await browser.ExecuteScriptAsync("(()=>{const b=[...document.querySelectorAll('button')].find(b=>b.textContent.trim()==='签到'&&!b.disabled&&b.getClientRects().length);if(b)b.click();})()");
@@ -144,6 +148,6 @@ public sealed class WebCheckinWindow:Window {
     await Task.Delay(1000);
    }
    SetStatus(clicked?"签到结果未确认。请查看官网提示或验证码；30 分钟后复查，避免连续重复提交。":"未找到官网签到按钮。请检查登录状态、网络或页面变化，可复制诊断提交问题。");
-  }catch(Exception ex){SetStatus("签到检查失败："+ex.Message+"。30 分钟后重试；可复制诊断提交问题。");}finally{busy=false;}
+  }catch(Exception ex){SetStatus("签到检查失败："+ex.Message+"。30 分钟后重试；可复制诊断提交问题。");}finally{busy=false;if(testLog==null&&!IsVisible&&!allowClose&&ready)browser.CoreWebView2.Navigate("about:blank");}
  }
 }
