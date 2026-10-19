@@ -112,7 +112,7 @@ jobs:
             Write-Host 'PASS: per-tunnel switches, sync preservation, encrypted restart persistence and switch off'
             # Exercise stop + log callbacks against a continuously writing process.
             Stop-Service LoliaBloomService
-            dotnet publish Lolia.Tests/Lolia.Tests.csproj -c Release -r win-x64 --self-contained false -o process-fixture
+            dotnet publish Lolia.Tests/Lolia.Tests.csproj -c Release -r win-x64 --self-contained true -o process-fixture
             if ($LASTEXITCODE) { throw 'Failed to build lifecycle fixture' }
             if (Test-Path "$engine.ci-disabled") { Move-Item "$engine.ci-disabled" $engine -Force }
             Copy-Item $engine "$engine.real" -Force
