@@ -182,6 +182,7 @@ public partial class MainWindow:ChromeWindow {
  }
  protected override void OnContentRendered(EventArgs e){
   base.OnContentRendered(e);SignalUpdateReady();var args=Environment.GetCommandLineArgs();
+  var layout=Array.IndexOf(args,"--layout-self-test");if(layout>=0&&layout+1<args.Length){RunLayoutTest(args[layout+1]);return;}
   var createIndex=Array.IndexOf(args,"--create-screenshot");
   if(createIndex>=0&&createIndex+1<args.Length){
    var nodes=new List<CloudNode>{new(1,"广州 · 精品线路（示例）","online",new[]{"tcp","udp","http","https"},false,true,"CN"),new(2,"香港 · 轻盈节点（示例）","online",new[]{"tcp","udp","http","https"},false,false,"HK"),new(3,"东京 · 备用节点（示例）","offline",new[]{"tcp","udp"},true,false,"JP")};

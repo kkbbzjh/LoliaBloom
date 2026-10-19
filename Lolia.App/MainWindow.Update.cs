@@ -26,7 +26,7 @@ public partial class MainWindow {
  }
  async Task CheckAppUpdate(bool manual){
   if(checkingUpdate||updateCancellation!=null)return;
-  if(!manual&&Environment.GetCommandLineArgs().Any(x=>x.Contains("screenshot")||x=="--self-test"||x=="--update-smoke"))return;
+  if(!manual&&Environment.GetCommandLineArgs().Any(x=>x.Contains("screenshot")||x=="--self-test"||x=="--update-smoke"||x=="--layout-self-test"))return;
   checkingUpdate=true;AppUpdateButton.IsEnabled=false;AppUpdateStatus.Text="正在检查新版…";
   try{
    using var limit=new CancellationTokenSource(TimeSpan.FromSeconds(30));availableRelease=await new AppUpdater(updateHttp).Check(typeof(MainWindow).Assembly.GetName().Version!,limit.Token);

@@ -48,12 +48,12 @@ Screenshots are rendered by the Windows client using example tunnels and traffic
 
 #### Single EXE (recommended)
 
-1. Open [GitHub Releases](https://github.com/kkbbzjh/LoliaBloom/releases/latest) and download `LoliaBloom-v0.7.12-win-x64.exe`.
+1. Open [GitHub Releases](https://github.com/kkbbzjh/LoliaBloom/releases/latest) and download `LoliaBloom-v0.7.13-win-x64.exe`.
 2. Double-click to run. No separate .NET installation is required.
 
 #### ZIP version
 
-Alternatively, download `LoliaBloom-v0.7.12-win-x64.zip`, extract it, and run `Lolia.App.exe`.
+Alternatively, download `LoliaBloom-v0.7.13-win-x64.zip`, extract it, and run `Lolia.App.exe`.
 
 #### Install the background service
 

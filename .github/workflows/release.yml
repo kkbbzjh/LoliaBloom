@@ -42,6 +42,13 @@ jobs:
           if (-not (Test-Path dist/LICENSE)) { throw 'Project license missing from distribution' }
           Copy-Item docs dist/docs -Recurse
           Copy-Item licenses dist/licenses -Recurse
+      - name: Verify window scrolling and maximized footer
+        shell: pwsh
+        run: |
+          $layout = Start-Process (Join-Path $PWD 'dist/Lolia.App.exe') -ArgumentList '--layout-self-test',(Join-Path $PWD 'layout-test.log') -PassThru
+          if (-not $layout.WaitForExit(45000)) { $layout.Kill(); throw 'Layout regression test timed out' }
+          Get-Content layout-test.log
+          if ($layout.ExitCode -ne 0) { throw 'Layout regression test failed' }
       - name: Verify automatic web check-in
         shell: pwsh
         run: |
@@ -182,37 +189,37 @@ jobs:
           $app = Start-Process (Join-Path $PWD 'dist/Lolia.App.exe') -ArgumentList '--screenshot', (Join-Path $PWD 'LoliaBloom-screenshot.png') -PassThru
           if (-not $app.WaitForExit(30000)) { $app.Kill(); throw 'Screenshot timed out' }
           if (-not (Test-Path LoliaBloom-screenshot.png)) { throw 'Screenshot missing' }
-          Compress-Archive dist/* LoliaBloom-v0.7.12-win-x64.zip -Force
-          Copy-Item LoliaBloom-v0.7.12-win-x64.zip payload.zip
+          Compress-Archive dist/* LoliaBloom-v0.7.13-win-x64.zip -Force
+          Copy-Item LoliaBloom-v0.7.13-win-x64.zip payload.zip
           dotnet publish Lolia.Launcher/Lolia.Launcher.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true -p:DebugType=None -o release
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
-          Copy-Item release/LoliaBloom.exe LoliaBloom-v0.7.12-win-x64.exe
-          $single = Start-Process (Join-Path $PWD 'LoliaBloom-v0.7.12-win-x64.exe') -ArgumentList '--self-test','--screenshot',(Join-Path $PWD 'single-file-screenshot.png') -PassThru
+          Copy-Item release/LoliaBloom.exe LoliaBloom-v0.7.13-win-x64.exe
+          $single = Start-Process (Join-Path $PWD 'LoliaBloom-v0.7.13-win-x64.exe') -ArgumentList '--self-test','--screenshot',(Join-Path $PWD 'single-file-screenshot.png') -PassThru
           if (-not $single.WaitForExit(90000)) { $single.Kill(); throw 'Single EXE startup timed out' }
           if ($single.ExitCode -ne 0 -or -not (Test-Path single-file-screenshot.png)) { throw 'Single EXE launch failed' }
           Copy-Item single-file-screenshot.png LoliaBloom-screenshot.png -Force
-          dotnet run --project Lolia.Tests/Lolia.Tests.csproj -c Release -- --update-launch-test (Join-Path $PWD 'LoliaBloom-v0.7.12-win-x64.exe')
+          dotnet run --project Lolia.Tests/Lolia.Tests.csproj -c Release -- --update-launch-test (Join-Path $PWD 'LoliaBloom-v0.7.13-win-x64.exe')
           if ($LASTEXITCODE) { throw 'Real update handoff test failed' }
-          $create = Start-Process (Join-Path $PWD 'LoliaBloom-v0.7.12-win-x64.exe') -ArgumentList '--self-test','--create-screenshot',(Join-Path $PWD 'LoliaBloom-create.png') -PassThru
+          $create = Start-Process (Join-Path $PWD 'LoliaBloom-v0.7.13-win-x64.exe') -ArgumentList '--self-test','--create-screenshot',(Join-Path $PWD 'LoliaBloom-create.png') -PassThru
           if (-not $create.WaitForExit(90000) -or $create.ExitCode -ne 0 -or -not (Test-Path LoliaBloom-create.png)) { throw 'Create window launch failed' }
-          $details = Start-Process (Join-Path $PWD 'LoliaBloom-v0.7.12-win-x64.exe') -ArgumentList '--self-test','--details-screenshot',(Join-Path $PWD 'LoliaBloom-details.png') -PassThru
+          $details = Start-Process (Join-Path $PWD 'LoliaBloom-v0.7.13-win-x64.exe') -ArgumentList '--self-test','--details-screenshot',(Join-Path $PWD 'LoliaBloom-details.png') -PassThru
           if (-not $details.WaitForExit(90000) -or $details.ExitCode -ne 0 -or -not (Test-Path LoliaBloom-details.png)) { throw 'Details window launch failed' }
       - uses: actions/upload-artifact@v4
         with:
           name: LoliaBloom-win-x64
           path: |
-            LoliaBloom-v0.7.12-win-x64.exe
-            LoliaBloom-v0.7.12-win-x64.zip
+            LoliaBloom-v0.7.13-win-x64.exe
+            LoliaBloom-v0.7.13-win-x64.zip
             LoliaBloom-screenshot.png
             LoliaBloom-create.png
             LoliaBloom-details.png
           if-no-files-found: error
-      - name: Publish v0.7.12
+      - name: Publish v0.7.13
         env:
           GH_TOKEN: ${{ github.token }}
         shell: pwsh
         run: |
-          gh release view v0.7.12 *> $null
-          if ($LASTEXITCODE -eq 0) { Write-Host 'v0.7.12 already exists; skipping the duplicate release.'; exit 0 }
-          gh release create v0.7.12 LoliaBloom-v0.7.12-win-x64.exe LoliaBloom-v0.7.12-win-x64.zip LoliaBloom-screenshot.png LoliaBloom-create.png LoliaBloom-details.png --target '${{ github.sha }}' --title '洛链绽放 · Lolia Bloom v0.7.12' --notes 'Adds in-app release checks and one-click verified Windows updates with progress and cancellation. The old window exits only after the new window confirms startup; the check-in worker hands off without resetting its saved countdown. New single-file downloads are saved beside the currently launched EXE, without remembering a separate download directory. Includes update manifest, integrity and cancellation tests plus existing browser and service regression checks.'
+          gh release view v0.7.13 *> $null
+          if ($LASTEXITCODE -eq 0) { Write-Host 'v0.7.13 already exists; skipping the duplicate release.'; exit 0 }
+          gh release create v0.7.13 LoliaBloom-v0.7.13-win-x64.exe LoliaBloom-v0.7.13-win-x64.zip LoliaBloom-screenshot.png LoliaBloom-create.png LoliaBloom-details.png --target '${{ github.sha }}' --title '洛链绽放 · Lolia Bloom v0.7.13' --notes 'Adds in-app release checks and one-click verified Windows updates with progress and cancellation. The old window exits only after the new window confirms startup; the check-in worker hands off without resetting its saved countdown. New single-file downloads are saved beside the currently launched EXE, without remembering a separate download directory. Fixes scrolling with expanded diagnostics and keeps the maximized footer above the taskbar. Includes actual window layout checks, update manifest, integrity and cancellation tests plus existing browser and service regression checks.'
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
