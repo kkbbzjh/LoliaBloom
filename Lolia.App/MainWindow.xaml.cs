@@ -200,7 +200,7 @@ public partial class MainWindow:ChromeWindow {
   foreach(var t in remote){string? token=null;try{token=await api.TunnelToken(t.CloudName);}catch(Exception e){failures.Add(t.Label+"："+e.Message);}list.Add(new(t.Id,t.Label,false,t.Type,t.Node,t.LocalAddress,t.RemoteAddress,t.Remark,token));}
   try{var r=await Send(new("sync",Value:JsonSerializer.Serialize(list,Paths.Json)));if(!r.Ok)throw new Exception(r.Message);}catch(Exception e){failures.Add("云端同步成功，后台服务同步失败："+e.Message);}
   await Refresh();
-  if(failures.Count>0){Status.Text=string.Join("；",failures);if(failures.Any(f=>f.Contains("后台服务",StringComparison.Ordinal))){ServiceGuide.Visibility=Visibility.Visible;GuideTitle.Text="安装未完成，请先安装或修复后台服务";GuideDescription.Text=failures.Last();}}
+  if(failures.Count>0)ShowDiagnostics("同步未完整完成",string.Join(Environment.NewLine,failures));
  }
  TunnelRow Selected()=>TunnelGrid.SelectedItem as TunnelRow??throw new Exception("请先选中一条隧道");
  async Task Action(string action,string? value=null){var t=Selected();var r=await Send(new(action,t.Id,value));if(!r.Ok)throw new Exception(r.Message);await Refresh();}
@@ -216,7 +216,7 @@ public partial class MainWindow:ChromeWindow {
    if(!reply.Ok)throw new Exception(reply.Message);
    row.AutoStart=reply.Data is "true" or "false"?reply.Data=="true":desired;
    notice=row.Name+"："+reply.Message;
-  }catch(Exception ex){toggle.IsChecked=row.AutoStart;notice="未保存，开关已恢复："+ex.Message;}
+  }catch(Exception ex){toggle.IsChecked=row.AutoStart;notice="未保存，开关已恢复："+ex.Message;ShowDiagnostics("开机连接设置未保存",row.Name+"："+ex);}
   finally{noticeUntil=DateTimeOffset.UtcNow.AddSeconds(8);Status.Text=notice;autoPending.Remove(id);toggle.IsEnabled=true;await Refresh();}
  }
  async void UpdateFrp_Click(object s,RoutedEventArgs e)=>await Safe(async()=>{
