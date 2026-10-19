@@ -14,6 +14,9 @@ public class ChromeWindow:Window {
    var monitor=MonitorFromWindow(hwnd,2);var info=new MonitorInfo{Size=Marshal.SizeOf<MonitorInfo>()};
    if(GetMonitorInfo(monitor,ref info)){
     var limits=Marshal.PtrToStructure<MinMaxInfo>(lParam);
+    var dpi=System.Windows.Media.VisualTreeHelper.GetDpi(this);
+    limits.MinTrackSize.X=Math.Max(limits.MinTrackSize.X,(int)Math.Ceiling(MinWidth*dpi.DpiScaleX));
+    limits.MinTrackSize.Y=Math.Max(limits.MinTrackSize.Y,(int)Math.Ceiling(MinHeight*dpi.DpiScaleY));
     limits.MaxPosition=new NativePoint{X=info.Work.Left-info.Monitor.Left,Y=info.Work.Top-info.Monitor.Top};
     limits.MaxSize=new NativePoint{X=info.Work.Right-info.Work.Left,Y=info.Work.Bottom-info.Work.Top};
     Marshal.StructureToPtr(limits,lParam,false);handled=true;
