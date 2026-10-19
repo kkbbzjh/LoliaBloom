@@ -123,9 +123,14 @@ jobs:
               (Get-Service LoliaBloomService).WaitForStatus('Running', [TimeSpan]::FromSeconds(30))
               for ($attempt=0; $attempt -lt 6; $attempt++) {
                 Invoke-ServiceCommand @{action='start';id='99999999'}
-                Start-Sleep -Milliseconds 250
-                $observed = (Invoke-ServiceCommand @{action='list'}).data
-                if (-not $observed.Contains('中文连接日志') -or $observed.Contains('ci-only-credential')) { throw 'UTF-8 output or redaction regression' }
+                $utf8Ready = $false
+                for ($poll=0; $poll -lt 30; $poll++) {
+                  Start-Sleep -Milliseconds 100
+                  $observed = (Invoke-ServiceCommand @{action='list'}).data
+                  $sample = @($observed | ConvertFrom-Json) | Where-Object id -eq '99999999'
+                  if ($sample.recentLog -and $sample.recentLog.Contains('中文连接日志')) { $utf8Ready=$true; break }
+                }
+                if (-not $utf8Ready -or $observed.Contains('ci-only-credential')) { Write-Host $observed; throw 'UTF-8 output or redaction regression' }
                 $elapsed = [Diagnostics.Stopwatch]::StartNew()
                 Invoke-ServiceCommand @{action='stop';id='99999999'}
                 if ($elapsed.Elapsed.TotalSeconds -gt 8) { throw 'Noisy process stop blocked service IPC' }
