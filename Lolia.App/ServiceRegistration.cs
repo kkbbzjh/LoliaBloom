@@ -6,7 +6,7 @@ namespace Lolia.App;
 // Configure SCM directly. sc.exe config may first query the optional delayed
 // autostart value and fail before applying otherwise valid service settings.
 internal static class ServiceRegistration {
- const uint ChangeConfig=2,NoChange=0xffffffff;
+ const uint ChangeConfig=0x12,NoChange=0xffffffff;
  static void Check(bool ok,string step){if(!ok){var code=Marshal.GetLastWin32Error();throw new Win32Exception(code,$"{step}失败（Windows 错误 {code}）：{new Win32Exception(code).Message}。请复制本日志；现有隧道和登录数据未删除。");}}
  public static void Configure(string name,string binary,Action<string> log){
   using var manager=OpenSCManager(null,null,3);Check(!manager.IsInvalid,"打开 Windows 服务管理器");
