@@ -42,6 +42,13 @@ jobs:
           if (-not (Test-Path dist/LICENSE)) { throw 'Project license missing from distribution' }
           Copy-Item docs dist/docs -Recurse
           Copy-Item licenses dist/licenses -Recurse
+      - name: Verify automatic web check-in
+        shell: pwsh
+        run: |
+          $checkin = Start-Process (Join-Path $PWD 'dist/Lolia.App.exe') -ArgumentList '--checkin-self-test',(Join-Path $PWD 'checkin-test.log') -PassThru
+          if (-not $checkin.WaitForExit(120000)) { $checkin.Kill(); throw 'Web check-in test timed out' }
+          Get-Content checkin-test.log
+          if ($checkin.ExitCode -ne 0) { throw 'Web check-in regression test failed' }
       - name: Verify service installation and IPC
         shell: pwsh
         run: |
@@ -175,35 +182,35 @@ jobs:
           $app = Start-Process (Join-Path $PWD 'dist/Lolia.App.exe') -ArgumentList '--screenshot', (Join-Path $PWD 'LoliaBloom-screenshot.png') -PassThru
           if (-not $app.WaitForExit(30000)) { $app.Kill(); throw 'Screenshot timed out' }
           if (-not (Test-Path LoliaBloom-screenshot.png)) { throw 'Screenshot missing' }
-          Compress-Archive dist/* LoliaBloom-v0.7.10-win-x64.zip -Force
-          Copy-Item LoliaBloom-v0.7.10-win-x64.zip payload.zip
+          Compress-Archive dist/* LoliaBloom-v0.7.11-win-x64.zip -Force
+          Copy-Item LoliaBloom-v0.7.11-win-x64.zip payload.zip
           dotnet publish Lolia.Launcher/Lolia.Launcher.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true -p:DebugType=None -o release
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
-          Copy-Item release/LoliaBloom.exe LoliaBloom-v0.7.10-win-x64.exe
-          $single = Start-Process (Join-Path $PWD 'LoliaBloom-v0.7.10-win-x64.exe') -ArgumentList '--self-test','--screenshot',(Join-Path $PWD 'single-file-screenshot.png') -PassThru
+          Copy-Item release/LoliaBloom.exe LoliaBloom-v0.7.11-win-x64.exe
+          $single = Start-Process (Join-Path $PWD 'LoliaBloom-v0.7.11-win-x64.exe') -ArgumentList '--self-test','--screenshot',(Join-Path $PWD 'single-file-screenshot.png') -PassThru
           if (-not $single.WaitForExit(90000)) { $single.Kill(); throw 'Single EXE startup timed out' }
           if ($single.ExitCode -ne 0 -or -not (Test-Path single-file-screenshot.png)) { throw 'Single EXE launch failed' }
           Copy-Item single-file-screenshot.png LoliaBloom-screenshot.png -Force
-          $create = Start-Process (Join-Path $PWD 'LoliaBloom-v0.7.10-win-x64.exe') -ArgumentList '--self-test','--create-screenshot',(Join-Path $PWD 'LoliaBloom-create.png') -PassThru
+          $create = Start-Process (Join-Path $PWD 'LoliaBloom-v0.7.11-win-x64.exe') -ArgumentList '--self-test','--create-screenshot',(Join-Path $PWD 'LoliaBloom-create.png') -PassThru
           if (-not $create.WaitForExit(90000) -or $create.ExitCode -ne 0 -or -not (Test-Path LoliaBloom-create.png)) { throw 'Create window launch failed' }
-          $details = Start-Process (Join-Path $PWD 'LoliaBloom-v0.7.10-win-x64.exe') -ArgumentList '--self-test','--details-screenshot',(Join-Path $PWD 'LoliaBloom-details.png') -PassThru
+          $details = Start-Process (Join-Path $PWD 'LoliaBloom-v0.7.11-win-x64.exe') -ArgumentList '--self-test','--details-screenshot',(Join-Path $PWD 'LoliaBloom-details.png') -PassThru
           if (-not $details.WaitForExit(90000) -or $details.ExitCode -ne 0 -or -not (Test-Path LoliaBloom-details.png)) { throw 'Details window launch failed' }
       - uses: actions/upload-artifact@v4
         with:
           name: LoliaBloom-win-x64
           path: |
-            LoliaBloom-v0.7.10-win-x64.exe
-            LoliaBloom-v0.7.10-win-x64.zip
+            LoliaBloom-v0.7.11-win-x64.exe
+            LoliaBloom-v0.7.11-win-x64.zip
             LoliaBloom-screenshot.png
             LoliaBloom-create.png
             LoliaBloom-details.png
           if-no-files-found: error
-      - name: Publish v0.7.10
+      - name: Publish v0.7.11
         env:
           GH_TOKEN: ${{ github.token }}
         shell: pwsh
         run: |
-          gh release view v0.7.10 *> $null
-          if ($LASTEXITCODE -eq 0) { Write-Host 'v0.7.10 already exists; skipping the duplicate release.'; exit 0 }
-          gh release create v0.7.10 LoliaBloom-v0.7.10-win-x64.exe LoliaBloom-v0.7.10-win-x64.zip LoliaBloom-screenshot.png LoliaBloom-create.png LoliaBloom-details.png --target '${{ github.sha }}' --title '洛链绽放 · Lolia Bloom v0.7.10' --notes 'Fixes tunnel stop deadlocks by keeping process termination, stream disposal and disk logging outside shared state locks. Corrects UTF-8 FRP output, reports local backend connection failures with actionable advice, shows a small version label at the bottom left, and includes the version in EXE and ZIP download names.'
+          gh release view v0.7.11 *> $null
+          if ($LASTEXITCODE -eq 0) { Write-Host 'v0.7.11 already exists; skipping the duplicate release.'; exit 0 }
+          gh release create v0.7.11 LoliaBloom-v0.7.11-win-x64.exe LoliaBloom-v0.7.11-win-x64.zip LoliaBloom-screenshot.png LoliaBloom-create.png LoliaBloom-details.png --target '${{ github.sha }}' --title '洛链绽放 · Lolia Bloom v0.7.11' --notes 'Adds optional automatic website check-in on Windows with a separate local browser login, a persistent 24-hour countdown, background operation after closing the main window, Windows sign-in startup, and copyable diagnostics. Browser workflow tested with synthetic pages; real account login and verification remain user actions. Linux Docker check-in remains a link to the official website.'
           if ($LASTEXITCODE) { exit $LASTEXITCODE }

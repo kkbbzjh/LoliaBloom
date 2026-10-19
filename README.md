@@ -27,7 +27,7 @@ Screenshots are rendered by the Windows client using example tunnels and traffic
 - **Cloud tunnel creation** — select a node and create TCP, UDP, HTTP or HTTPS tunnels.
 - **Saved login** — click Login to authorize with the official website; OAuth PKCE, encrypted credentials and automatic token refresh.
 - **Local network rates** — live 60-second upload/download charts, refreshed every second with per-process Windows ETW counters. Excludes loopback and backend traffic; includes FRP transport overhead. Platform totals remain separate.
-- **Website check-in** — open the official dashboard to check in and view your check-in status.
+- **Automatic website check-in (Windows)**: sign in once in a separate local browser, then enable background check-in with a persistent 24-hour countdown, Windows sign-in startup and copyable diagnostics. Login expiry or verification needs user attention. Linux retains the official website link.
 
 - **Pink interface** — a clean tunnel list with per-tunnel start and stop buttons.
 - **Tunnel details** — a live card view of rates, traffic trends, platform totals, startup state and copyable access addresses.
@@ -46,16 +46,22 @@ Screenshots are rendered by the Windows client using example tunnels and traffic
 
 #### Single EXE (recommended)
 
-1. Open [GitHub Releases](https://github.com/kkbbzjh/LoliaBloom/releases/latest) and download `LoliaBloom-win-x64.exe`.
+1. Open [GitHub Releases](https://github.com/kkbbzjh/LoliaBloom/releases/latest) and download `LoliaBloom-v0.7.11-win-x64.exe`.
 2. Double-click to run. No separate .NET installation is required.
 
 #### ZIP version
 
-Alternatively, download `LoliaBloom-win-x64.zip`, extract it, and run `LoliaBloom.exe`.
+Alternatively, download `LoliaBloom-v0.7.11-win-x64.zip`, extract it, and run `Lolia.App.exe`.
 
 #### Install the background service
 
 To keep tunnels running after closing the window, choose **Install background service** in the app and approve the Windows administrator prompt.
+
+### Automatic website check-in on Windows
+
+Open “自动签到 / 官网登录” at the bottom left, sign in on the embedded official website, then enable the switch. This website session is separate from the app’s OAuth login and stays on your Windows account. Microsoft Edge WebView2 Runtime is required.
+
+A confirmed success starts a saved **24-hour + 30-second** timer. Closing either window keeps the enabled worker running; it also starts at Windows sign-in. Shutdown or sign-out pauses execution until next sign-in. If the website already shows checked-in but its timestamp is unknown, the worker checks availability every 30 minutes. Use “关闭自动签到并退出” to stop the worker and remove startup registration. Expired login, verification, network failures and website changes are shown in copyable diagnostics.
 
 ### Linux / NAS (Docker Compose)
 

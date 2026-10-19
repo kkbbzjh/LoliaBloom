@@ -32,7 +32,7 @@ public partial class MainWindow:ChromeWindow {
  readonly HashSet<string> autoPending=new();
  string? notice;DateTimeOffset noticeUntil;
  public MainWindow(){
-  InitializeComponent();AppVersion.Text="v"+(typeof(MainWindow).Assembly.GetName().Version?.ToString(3)??"未知");UploadChart.LineBrush=new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(133,101,165));api=new LoliaApi(http,GetAccessToken);
+  InitializeComponent();try{WebCheckinWindow.ResumeIfEnabled();}catch(Exception ex){CheckinStatus.Text="后台签到启动失败："+ex.Message;}AppVersion.Text="v"+(typeof(MainWindow).Assembly.GetName().Version?.ToString(3)??"未知");UploadChart.LineBrush=new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(133,101,165));api=new LoliaApi(http,GetAccessToken);
   Loaded+=async(_,_)=>{if(session!=null)await Safe(Sync);else await Refresh();poller.Tick+=async(_,_)=>await Refresh();poller.Start();};Closed+=(_,_)=>{poller.Stop();details?.Close();};
  }
  async Task<string> GetAccessToken(){
@@ -73,6 +73,7 @@ public partial class MainWindow:ChromeWindow {
   }finally{pipeGate.Release();}
  }
  async Task Refresh(){
+  CheckinStatus.Text=WebCheckinSettings.Summary();
   if(refreshing||installingService||autoPending.Count>0)return;refreshing=true;
   try{
    List<TunnelRow> list;
@@ -123,7 +124,7 @@ public partial class MainWindow:ChromeWindow {
     await limit.WaitAsync();try{return (Id:c.Id,Sample:await api.Traffic(c.CloudName));}finally{limit.Release();}
    });
    var samples=await Task.WhenAll(requests);foreach(var item in samples)cloudTotals[item.Id]=item.Sample;
-   CheckinStatus.Text="签到间隔以官网为准，点击查看可签到状态。";
+   CheckinStatus.Text=WebCheckinSettings.Summary();
   }catch(Exception e){CheckinStatus.Text="平台状态："+e.Message;}finally{cloudRefreshing=false;}
  }
  async Task Safe(Func<Task> f){try{await f();}catch(Exception e){ShowDiagnostics("操作未完成",e.ToString());}}
@@ -286,7 +287,7 @@ public partial class MainWindow:ChromeWindow {
   try{var row=Selected();if(details?.TunnelId==row.Id){details.Activate();return;}details?.Close();var dialog=new TunnelDetailsWindow(row){Owner=this};details=dialog;dialog.Closed+=(_,_)=>{if(details==dialog)details=null;};dialog.Show();}catch(Exception ex){Status.Text=ex.Message;}
  }
  void Checkin_Click(object s,RoutedEventArgs e){
-  try{Process.Start(new ProcessStartInfo("https://dash.lolia.link/dash"){UseShellExecute=true});CheckinStatus.Text="已打开官网，在首页点击签到即可。";}catch(Exception ex){MessageBox.Show(ex.Message);}
+  try{WebCheckinWindow.Launch(true);CheckinStatus.Text=WebCheckinSettings.Summary();}catch(Exception ex){ShowDiagnostics("无法打开自动签到",ex.ToString());}
  }
  void CopyAddress_Click(object s,RoutedEventArgs e){if(s is System.Windows.Controls.Button b&&b.Tag is string value)CopyAddress(value);}
  void CopySelected_Click(object s,RoutedEventArgs e){try{CopyAddress(Selected().RemoteAddress);}catch(Exception ex){MessageBox.Show(ex.Message);}}
