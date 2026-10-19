@@ -48,12 +48,12 @@
 
 #### 单文件版（推荐）
 
-1. 打开 [GitHub Releases 下载页](https://github.com/kkbbzjh/LoliaBloom/releases/latest)，下载 `LoliaBloom-v0.7.13-win-x64.exe`。
+1. 打开 [GitHub Releases 下载页](https://github.com/kkbbzjh/LoliaBloom/releases/latest)，下载 `LoliaBloom-v0.7.14-win-x64.exe`。
 2. 双击运行即可，不需要单独安装 .NET。
 
 #### ZIP 版
 
-也可以下载 `LoliaBloom-v0.7.13-win-x64.zip`，解压后运行其中的 `Lolia.App.exe`。
+也可以下载 `LoliaBloom-v0.7.14-win-x64.zip`，解压后运行其中的 `Lolia.App.exe`。
 
 #### 安装后台服务
 
