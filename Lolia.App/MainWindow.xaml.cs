@@ -28,7 +28,7 @@ public partial class MainWindow:ChromeWindow {
  readonly Dictionary<string,CloudTunnel> cloud=new();
  LoliaApi api=null!;
  bool refreshing,signingIn;
- string? lastServiceError,lastReportedTunnelError;
+ string? lastServiceError,lastReportedTunnelError,lastReportedServiceIssue;
  readonly HashSet<string> autoPending=new();
  string? notice;DateTimeOffset noticeUntil;
  public MainWindow(){
@@ -77,7 +77,7 @@ public partial class MainWindow:ChromeWindow {
   try{
    List<TunnelRow> list;
    string serviceStatus;
-   try{var r=await Send(new("list"));if(!r.Ok)throw new Exception(r.Message);list=JsonSerializer.Deserialize<List<TunnelRow>>(r.Data!,Paths.Json)??new();serviceStatus=r.Message=="OK:4"?"后台服务已连接":"后台服务需要升级，点击上方按钮更新诊断与开机连接功能";}
+   try{var r=await Send(new("list"));if(!r.Ok)throw new Exception(r.Message);list=JsonSerializer.Deserialize<List<TunnelRow>>(r.Data!,Paths.Json)??new();lastServiceError=r.Diagnostic;serviceStatus=r.Message=="OK:4"?"后台服务已连接":"后台服务需要升级，点击上方按钮更新诊断与开机连接功能";}
    catch(Exception serviceError){lastServiceError=serviceError.Message;list=cloud.Values.Select(t=>new TunnelRow{Id=t.Id,Name=t.Label,Type=t.Type,Node=t.Node,LocalAddress=t.LocalAddress,RemoteAddress=t.RemoteAddress,Description=t.Remark}).ToList();serviceStatus=serviceError.Message;}
    foreach(var t in list){if(cloudTotals.TryGetValue(t.Id,out var total)){t.TotalBytesIn=total.In;t.TotalBytesOut=total.Out;}}
    if(session!=null&&!cloudRefreshing&&DateTimeOffset.UtcNow>=nextCloudPoll)_=RefreshCloudData();
@@ -100,6 +100,7 @@ public partial class MainWindow:ChromeWindow {
    UploadChart.Add(list.Any(t=>t.UploadBytesPerSecond!=null)?list.Sum(t=>t.UploadBytesPerSecond??0):null);
    details?.Update(list.FirstOrDefault(t=>t.Id==details.TunnelId));
    RunningCount.Text=$"{list.Count(t=>t.Running)} / {list.Count}";
+   if(lastServiceError!=null&&lastServiceError!=lastReportedServiceIssue){lastReportedServiceIssue=lastServiceError;ShowDiagnostics("后台服务状态异常",lastServiceError);}
    var failed=list.FirstOrDefault(t=>!string.IsNullOrWhiteSpace(t.LastError));
    var fingerprint=failed==null?null:failed.Id+failed.LastError;
    if(failed!=null&&fingerprint!=lastReportedTunnelError){lastReportedTunnelError=fingerprint;ShowDiagnostics("隧道启动 / 开机连接异常",failed.LastError??"");}
@@ -299,7 +300,7 @@ public partial class MainWindow:ChromeWindow {
  public System.Windows.Media.Brush StateBrush=>Running?System.Windows.Media.Brushes.MediumSeaGreen:System.Windows.Media.Brushes.IndianRed;
  public System.Windows.Media.Brush ActionBrush=>Running?new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(144,121,145)):new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(219,67,133));
  public string? LastError{get;set;}public string? StartupStatus{get;set;}public string? RecentLog{get;set;}
- public string AutoText=>AutoStart?"已开启":"已关闭";
+ public string AutoText=>!AutoStart?"已关闭":StartupStatus?.Contains("重试")==true?"等待重试":StartupStatus?.Contains("完成")==true?"本轮已启动":"已开启";
  public string StateText=>!Running&&!string.IsNullOrWhiteSpace(LastError)?"启动异常":Running?"进程运行":"已停止";public string ToggleText=>Running?"停止":"启动";
  public static string Format(double? n,bool rate=false){if(n is null)return "—";var v=n.Value;string[] u={"B","KB","MB","GB","TB"};int i=0;while(v>=1024&&i<u.Length-1){v/=1024;i++;}return $"{v:0.##} {u[i]}"+(rate?"/s":"");}
  public string DownloadText=>Format(DownloadBytesPerSecond,true);public string UploadText=>Format(UploadBytesPerSecond,true);

@@ -4,7 +4,7 @@ public record Tunnel(string Id,string Name,bool AutoStart=false, string? Type=nu
 public record TunnelView(string Id,string Name,bool AutoStart,bool Running,string? Type,string? Node,string? LocalAddress,string? RemoteAddress,string? Description,
     long? TotalBytesIn=null,long? TotalBytesOut=null,double? DownloadBytesPerSecond=null,double? UploadBytesPerSecond=null,string? MetricsSource=null,long? LocalBytesIn=null,long? LocalBytesOut=null,string? LastError=null,string? StartupStatus=null,string? RecentLog=null);
 public record Command(string Action,string? Id=null,string? Value=null);
-public record Reply(bool Ok,string Message,string? Data=null);
+public record Reply(bool Ok,string Message,string? Data=null,string? Diagnostic=null);
 public static class Paths {
  public static readonly string Root=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),"LoliaBloom");
  public static string Tunnels=>Path.Combine(Root,"tunnels.json");

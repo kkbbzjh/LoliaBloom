@@ -21,11 +21,12 @@ sealed class Manager:BackgroundService {
  readonly object gate=new();
  List<Tunnel> tunnels=new();
  StartupConnections? startup;
+ string? serviceIssue;
  readonly Dictionary<string,string> errors=new();
  readonly Dictionary<string,Queue<string>> recent=new();
  protected override async Task ExecuteAsync(CancellationToken ct) {
   traffic.Start();
-  try { if(File.Exists(Paths.Tunnels)) {var bytes=await File.ReadAllBytesAsync(Paths.Tunnels,ct);tunnels=JsonSerializer.Deserialize<List<Tunnel>>(bytes.Length>0&&bytes[0]==(byte)'['?bytes:ProtectedData.Unprotect(bytes,null,DataProtectionScope.LocalMachine),Paths.Json)??new();} }catch{}
+  try { if(File.Exists(Paths.Tunnels)) {var bytes=await File.ReadAllBytesAsync(Paths.Tunnels,ct);tunnels=JsonSerializer.Deserialize<List<Tunnel>>(bytes.Length>0&&bytes[0]==(byte)'['?bytes:ProtectedData.Unprotect(bytes,null,DataProtectionScope.LocalMachine),Paths.Json)??new();} }catch(Exception ex){serviceIssue="读取已保存的隧道失败，开机连接未执行。请勿删除配置；先重新登录同步，仍失败时复制报告。详情："+ex.Message;Record("service",serviceIssue,true);}
   startup=new StartupConnections(tunnels.Where(t=>t.AutoStart).Select(t=>t.Id));
   var startupTask=MaintainStartup(ct);
   while(!ct.IsCancellationRequested){
@@ -57,7 +58,7 @@ sealed class Manager:BackgroundService {
    case "list": return new(true,"OK:4",JsonSerializer.Serialize(tunnels.Select(t=>{
     var active=IsRunning(t.Id);var m=traffic.Get(t.Id,active);
     return new TunnelView(t.Id,t.Name,t.AutoStart,active,t.Type,t.Node,t.LocalAddress,t.RemoteAddress,t.Description,null,null,m.Download,m.Upload,m.Source,m.Received,m.Sent,Error(t.Id),t.AutoStart?startup?.Describe(t.Id):"未启用开机连接",Recent(t.Id));
-   }),Paths.Json));
+   }),Paths.Json),serviceIssue);
    case "sync": {
     var incoming=JsonSerializer.Deserialize<List<Tunnel>>(c.Value??"[]",Paths.Json)??new();
     if(incoming.Select(t=>t.Id).Distinct().Count()!=incoming.Count||incoming.Count>10000||incoming.Any(t=>!System.Text.RegularExpressions.Regex.IsMatch(t.Id,@"^[0-9A-Za-z_-]{1,100}$")))return new(false,"Invalid tunnel IDs");

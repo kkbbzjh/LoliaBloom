@@ -130,12 +130,12 @@ jobs:
             LoliaBloom-create.png
             LoliaBloom-details.png
           if-no-files-found: error
-      - name: Publish v0.7.6
+      - name: Publish v0.7.7
         env:
           GH_TOKEN: ${{ github.token }}
         shell: pwsh
         run: |
-          gh release view v0.7.6 *> $null
-          if ($LASTEXITCODE -eq 0) { Write-Host 'v0.7.6 already exists; skipping the duplicate release.'; exit 0 }
-          gh release create v0.7.6 LoliaBloom-win-x64.exe LoliaBloom-win-x64.zip LoliaBloom-screenshot.png LoliaBloom-create.png LoliaBloom-details.png --target '${{ github.sha }}' --title '洛链绽放 · Lolia Bloom v0.7.6' --notes 'Replaces the in-app PowerShell service installer with a native elevated installer. Adds live copyable installation logs, actionable service errors, per-tunnel FRP output and exit reasons, startup retry state and one-click diagnostic reports. Tokens and tunnel credentials are redacted from reports.'
+          gh release view v0.7.7 *> $null
+          if ($LASTEXITCODE -eq 0) { Write-Host 'v0.7.7 already exists; skipping the duplicate release.'; exit 0 }
+          gh release create v0.7.7 LoliaBloom-win-x64.exe LoliaBloom-win-x64.zip LoliaBloom-screenshot.png LoliaBloom-create.png LoliaBloom-details.png --target '${{ github.sha }}' --title '洛链绽放 · Lolia Bloom v0.7.7' --notes 'Replaces the in-app PowerShell service installer with a native elevated installer. Adds live copyable installation logs, actionable service errors, per-tunnel FRP output and exit reasons, startup retry state and one-click diagnostic reports. Tokens and tunnel credentials are redacted from reports.'
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
