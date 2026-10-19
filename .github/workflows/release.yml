@@ -110,6 +110,36 @@ jobs:
             $off = (Invoke-ServiceCommand @{action='list'}).data | ConvertFrom-Json
             if (@($off | Where-Object autoStart).Count -ne 0) { throw 'Switch off was not persisted' }
             Write-Host 'PASS: per-tunnel switches, sync preservation, encrypted restart persistence and switch off'
+            # Exercise stop + log callbacks against a continuously writing process.
+            Stop-Service LoliaBloomService
+            dotnet publish Lolia.Tests/Lolia.Tests.csproj -c Release -r win-x64 --self-contained false -o process-fixture
+            if ($LASTEXITCODE) { throw 'Failed to build lifecycle fixture' }
+            Copy-Item $engine "$engine.real" -Force
+            Copy-Item process-fixture/* (Split-Path $engine) -Recurse -Force
+            Copy-Item process-fixture/Lolia.Tests.exe $engine -Force
+            try {
+              Start-Service LoliaBloomService
+              (Get-Service LoliaBloomService).WaitForStatus('Running', [TimeSpan]::FromSeconds(30))
+              for ($attempt=0; $attempt -lt 6; $attempt++) {
+                Invoke-ServiceCommand @{action='start';id='99999999'}
+                Start-Sleep -Milliseconds 250
+                $observed = (Invoke-ServiceCommand @{action='list'}).data
+                if (-not $observed.Contains('中文连接日志') -or $observed.Contains('ci-only-credential')) { throw 'UTF-8 output or redaction regression' }
+                $elapsed = [Diagnostics.Stopwatch]::StartNew()
+                Invoke-ServiceCommand @{action='stop';id='99999999'}
+                if ($elapsed.Elapsed.TotalSeconds -gt 8) { throw 'Noisy process stop blocked service IPC' }
+                Invoke-ServiceCommand @{action='auto';id='99999999';value='true'}
+                Invoke-ServiceCommand @{action='auto';id='99999999';value='false'}
+                Invoke-ServiceCommand @{action='list'}
+              }
+              Write-Host 'PASS: repeated noisy process start/stop, UTF-8 logs, settings saves and IPC responsiveness'
+            } finally {
+              Stop-Service LoliaBloomService -ErrorAction SilentlyContinue
+              Copy-Item "$engine.real" $engine -Force
+              Remove-Item "$engine.real"
+              Start-Service LoliaBloomService
+              (Get-Service LoliaBloomService).WaitForStatus('Running', [TimeSpan]::FromSeconds(30))
+            }
             Invoke-ServiceCommand @{action='sync';value='[]'}
           } finally {
             Stop-Service LoliaBloomService -ErrorAction SilentlyContinue
@@ -119,35 +149,35 @@ jobs:
           $app = Start-Process (Join-Path $PWD 'dist/Lolia.App.exe') -ArgumentList '--screenshot', (Join-Path $PWD 'LoliaBloom-screenshot.png') -PassThru
           if (-not $app.WaitForExit(30000)) { $app.Kill(); throw 'Screenshot timed out' }
           if (-not (Test-Path LoliaBloom-screenshot.png)) { throw 'Screenshot missing' }
-          Compress-Archive dist/* LoliaBloom-win-x64.zip -Force
-          Copy-Item LoliaBloom-win-x64.zip payload.zip
+          Compress-Archive dist/* LoliaBloom-v0.7.10-win-x64.zip -Force
+          Copy-Item LoliaBloom-v0.7.10-win-x64.zip payload.zip
           dotnet publish Lolia.Launcher/Lolia.Launcher.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true -p:DebugType=None -o release
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
-          Copy-Item release/LoliaBloom.exe LoliaBloom-win-x64.exe
-          $single = Start-Process (Join-Path $PWD 'LoliaBloom-win-x64.exe') -ArgumentList '--self-test','--screenshot',(Join-Path $PWD 'single-file-screenshot.png') -PassThru
+          Copy-Item release/LoliaBloom.exe LoliaBloom-v0.7.10-win-x64.exe
+          $single = Start-Process (Join-Path $PWD 'LoliaBloom-v0.7.10-win-x64.exe') -ArgumentList '--self-test','--screenshot',(Join-Path $PWD 'single-file-screenshot.png') -PassThru
           if (-not $single.WaitForExit(90000)) { $single.Kill(); throw 'Single EXE startup timed out' }
           if ($single.ExitCode -ne 0 -or -not (Test-Path single-file-screenshot.png)) { throw 'Single EXE launch failed' }
           Copy-Item single-file-screenshot.png LoliaBloom-screenshot.png -Force
-          $create = Start-Process (Join-Path $PWD 'LoliaBloom-win-x64.exe') -ArgumentList '--self-test','--create-screenshot',(Join-Path $PWD 'LoliaBloom-create.png') -PassThru
+          $create = Start-Process (Join-Path $PWD 'LoliaBloom-v0.7.10-win-x64.exe') -ArgumentList '--self-test','--create-screenshot',(Join-Path $PWD 'LoliaBloom-create.png') -PassThru
           if (-not $create.WaitForExit(90000) -or $create.ExitCode -ne 0 -or -not (Test-Path LoliaBloom-create.png)) { throw 'Create window launch failed' }
-          $details = Start-Process (Join-Path $PWD 'LoliaBloom-win-x64.exe') -ArgumentList '--self-test','--details-screenshot',(Join-Path $PWD 'LoliaBloom-details.png') -PassThru
+          $details = Start-Process (Join-Path $PWD 'LoliaBloom-v0.7.10-win-x64.exe') -ArgumentList '--self-test','--details-screenshot',(Join-Path $PWD 'LoliaBloom-details.png') -PassThru
           if (-not $details.WaitForExit(90000) -or $details.ExitCode -ne 0 -or -not (Test-Path LoliaBloom-details.png)) { throw 'Details window launch failed' }
       - uses: actions/upload-artifact@v4
         with:
           name: LoliaBloom-win-x64
           path: |
-            LoliaBloom-win-x64.exe
-            LoliaBloom-win-x64.zip
+            LoliaBloom-v0.7.10-win-x64.exe
+            LoliaBloom-v0.7.10-win-x64.zip
             LoliaBloom-screenshot.png
             LoliaBloom-create.png
             LoliaBloom-details.png
           if-no-files-found: error
-      - name: Publish v0.7.9
+      - name: Publish v0.7.10
         env:
           GH_TOKEN: ${{ github.token }}
         shell: pwsh
         run: |
-          gh release view v0.7.9 *> $null
-          if ($LASTEXITCODE -eq 0) { Write-Host 'v0.7.9 already exists; skipping the duplicate release.'; exit 0 }
-          gh release create v0.7.9 LoliaBloom-win-x64.exe LoliaBloom-win-x64.zip LoliaBloom-screenshot.png LoliaBloom-create.png LoliaBloom-details.png --target '${{ github.sha }}' --title '洛链绽放 · Lolia Bloom v0.7.9' --notes 'Repairs orphaned Windows service registrations when updating service configuration fails with Windows error 2. Restores missing registration fields and rebuilds only the service registration if necessary, preserving tunnel data, login information and the FRP engine. Tests include an existing SCM service whose registry key has been removed.'
+          gh release view v0.7.10 *> $null
+          if ($LASTEXITCODE -eq 0) { Write-Host 'v0.7.10 already exists; skipping the duplicate release.'; exit 0 }
+          gh release create v0.7.10 LoliaBloom-v0.7.10-win-x64.exe LoliaBloom-v0.7.10-win-x64.zip LoliaBloom-screenshot.png LoliaBloom-create.png LoliaBloom-details.png --target '${{ github.sha }}' --title '洛链绽放 · Lolia Bloom v0.7.10' --notes 'Fixes tunnel stop deadlocks by keeping process termination, stream disposal and disk logging outside shared state locks. Corrects UTF-8 FRP output, reports local backend connection failures with actionable advice, shows a small version label at the bottom left, and includes the version in EXE and ZIP download names.'
           if ($LASTEXITCODE) { exit $LASTEXITCODE }

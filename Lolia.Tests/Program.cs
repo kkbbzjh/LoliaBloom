@@ -1,6 +1,11 @@
 using System.Net;
 using System.Text;
 using Lolia.Shared;
+// A noisy UTF-8 child process for the Windows service lifecycle regression test.
+if(args.Length==2&&args[0]=="-t"){
+ Console.OutputEncoding=new UTF8Encoding(false);
+ while(true){Console.WriteLine("中文连接日志：本地服务尚未启动");Console.Error.WriteLine("connect to local service [127.0.0.1:6789] error: connection refused");Thread.Sleep(10);}
+}
 void Assert(bool b,string msg){if(!b)throw new Exception(msg);}
 var bootTime=DateTimeOffset.UtcNow;
 var bootEnabled=new HashSet<string>{"a","b"};var bootRunning=new HashSet<string>();var bootAttempts=new List<string>();

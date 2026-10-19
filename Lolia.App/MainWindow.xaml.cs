@@ -32,7 +32,7 @@ public partial class MainWindow:ChromeWindow {
  readonly HashSet<string> autoPending=new();
  string? notice;DateTimeOffset noticeUntil;
  public MainWindow(){
-  InitializeComponent();UploadChart.LineBrush=new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(133,101,165));api=new LoliaApi(http,GetAccessToken);
+  InitializeComponent();AppVersion.Text="v"+(typeof(MainWindow).Assembly.GetName().Version?.ToString(3)??"未知");UploadChart.LineBrush=new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(133,101,165));api=new LoliaApi(http,GetAccessToken);
   Loaded+=async(_,_)=>{if(session!=null)await Safe(Sync);else await Refresh();poller.Tick+=async(_,_)=>await Refresh();poller.Start();};Closed+=(_,_)=>{poller.Stop();details?.Close();};
  }
  async Task<string> GetAccessToken(){
@@ -68,7 +68,7 @@ public partial class MainWindow:ChromeWindow {
     var line=await reader.ReadLineAsync(timeout.Token);
     if(line==null)throw new IOException("后台服务意外关闭连接，请重新安装服务后重试");
     return JsonSerializer.Deserialize<Reply>(line,Paths.Json)??throw new IOException("后台服务返回了空响应");
-   }catch(OperationCanceledException){throw new System.TimeoutException("后台服务正在运行，但 15 秒内未响应。请点击一键安装后台服务进行修复，并关闭其他旧版窗口。");}
+   }catch(OperationCanceledException){throw new System.TimeoutException("后台服务在 15 秒内未确认命令结果（"+c.Action+"）。请先刷新并查看诊断报告，确认隧道实际状态；不要连续重复点击或直接重装服务。");}
    catch(UnauthorizedAccessException){throw new IOException("Windows 拒绝访问后台服务通信通道，请重新安装服务修复权限。");}
   }finally{pipeGate.Release();}
  }
@@ -77,7 +77,7 @@ public partial class MainWindow:ChromeWindow {
   try{
    List<TunnelRow> list;
    string serviceStatus;
-   try{var r=await Send(new("list"));if(!r.Ok)throw new Exception(r.Message);list=JsonSerializer.Deserialize<List<TunnelRow>>(r.Data!,Paths.Json)??new();lastServiceError=r.Diagnostic;serviceStatus=r.Message=="OK:4"?"后台服务已连接":"后台服务需要升级，点击上方按钮更新诊断与开机连接功能";}
+   try{var r=await Send(new("list"));if(!r.Ok)throw new Exception(r.Message);list=JsonSerializer.Deserialize<List<TunnelRow>>(r.Data!,Paths.Json)??new();lastServiceError=r.Diagnostic;serviceStatus=r.Message=="OK:5"?"后台服务已连接":"后台服务需要升级，点击上方按钮更新诊断与开机连接功能";}
    catch(Exception serviceError){lastServiceError=serviceError.Message;list=cloud.Values.Select(t=>new TunnelRow{Id=t.Id,Name=t.Label,Type=t.Type,Node=t.Node,LocalAddress=t.LocalAddress,RemoteAddress=t.RemoteAddress,Description=t.Remark}).ToList();serviceStatus=serviceError.Message;}
    foreach(var t in list){if(cloudTotals.TryGetValue(t.Id,out var total)){t.TotalBytesIn=total.In;t.TotalBytesOut=total.Out;}}
    if(session!=null&&!cloudRefreshing&&DateTimeOffset.UtcNow>=nextCloudPoll)_=RefreshCloudData();
