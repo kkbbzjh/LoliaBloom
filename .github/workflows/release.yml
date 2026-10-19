@@ -151,7 +151,12 @@ jobs:
             $serviceExe = Join-Path $env:ProgramFiles 'LoliaBloom/Service/Lolia.Service.exe'
             Copy-Item process-fixture/* (Split-Path $serviceExe) -Recurse -Force
             Copy-Item process-fixture/Lolia.Tests.exe $serviceExe -Force
-            Start-Service LoliaBloomService
+            New-Item (Join-Path (Split-Path $serviceExe) 'hang-stop.fixture') -ItemType File -Force | Out-Null
+            try { Start-Service LoliaBloomService } catch {
+              Get-Content (Join-Path (Split-Path $serviceExe) 'hang-stop.log') -ErrorAction SilentlyContinue
+              Get-WinEvent -LogName Application -MaxEvents 8 -ErrorAction SilentlyContinue | Format-List Message
+              throw
+            }
             $stuck = Get-Service LoliaBloomService
             $stuck.WaitForStatus('Running', [TimeSpan]::FromSeconds(30))
             $stuck.Stop()
@@ -160,6 +165,7 @@ jobs:
             $recovery = Start-Process (Join-Path $PWD 'dist/Lolia.App.exe') -ArgumentList '--install-service','--install-log',(Join-Path $PWD 'stop-pending-recovery.log') -PassThru -Wait
             Get-Content stop-pending-recovery.log
             if ($recovery.ExitCode -ne 0 -or -not (Select-String -Path stop-pending-recovery.log -SimpleMatch '已核对本程序服务 PID')) { throw 'Verified StopPending recovery failed' }
+            Remove-Item (Join-Path (Split-Path $serviceExe) 'hang-stop.fixture') -Force
             Write-Host 'PASS: verified service PID/path recovery from a deliberately hung StopPending fixture'
             Invoke-ServiceCommand @{action='sync';value='[]'}
           } finally {

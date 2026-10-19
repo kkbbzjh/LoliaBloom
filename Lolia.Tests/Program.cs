@@ -1,7 +1,7 @@
 using System.Net;
 using System.Text;
 using Lolia.Shared;
-if(args.Contains("--hang-stop-service")||Path.GetFileName(Environment.ProcessPath).Equals("Lolia.Service.exe",StringComparison.OrdinalIgnoreCase)){System.ServiceProcess.ServiceBase.Run(new HangStopService());return;}
+if(args.Contains("--hang-stop-service")||File.Exists(Path.Combine(AppContext.BaseDirectory,"hang-stop.fixture"))){HangStopService.Run();return;}
 // A noisy UTF-8 child process for the Windows service lifecycle regression test.
 if(args.Length==2&&args[0]=="-t"){
  Console.OutputEncoding=new UTF8Encoding(false);
@@ -90,7 +90,20 @@ Console.WriteLine("PASS: pagination, request methods, protocol parsing, credenti
 static HttpResponseMessage Json(string data,HttpStatusCode code=HttpStatusCode.OK)=>new(code){Content=new StringContent(data,Encoding.UTF8,"application/json")};
 sealed class Fake(Func<HttpRequestMessage,Task<HttpResponseMessage>> handle):HttpMessageHandler{protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage r,CancellationToken ct)=>handle(r);}
 
-sealed class HangStopService:System.ServiceProcess.ServiceBase {
- public HangStopService(){ServiceName="LoliaBloomService";}
- protected override void OnStop()=>Thread.Sleep(120000);
+static class HangStopService {
+ [System.Runtime.InteropServices.UnmanagedFunctionPointer(System.Runtime.InteropServices.CallingConvention.Winapi)]delegate void MainCallback(uint count,IntPtr args);
+ [System.Runtime.InteropServices.UnmanagedFunctionPointer(System.Runtime.InteropServices.CallingConvention.Winapi)]delegate void HandlerCallback(uint command);
+ [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]struct Entry {public IntPtr Name,Main;}
+ [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]struct Status {public uint Type,State,Accepted,Win32Exit,ServiceExit,Checkpoint,WaitHint;}
+ static readonly MainCallback main=Main;static readonly HandlerCallback handler=Handle;static IntPtr handle;
+ static void Trace(string line)=>File.AppendAllText(Path.Combine(AppContext.BaseDirectory,"hang-stop.log"),line+Environment.NewLine);
+ public static void Run(){
+  Trace("Entering native test service dispatcher");var name=System.Runtime.InteropServices.Marshal.StringToHGlobalUni("LoliaBloomService");
+  try{if(!StartServiceCtrlDispatcher(new[]{new Entry{Name=name,Main=System.Runtime.InteropServices.Marshal.GetFunctionPointerForDelegate(main)},new Entry()}))Trace("Dispatcher error "+System.Runtime.InteropServices.Marshal.GetLastWin32Error());}finally{System.Runtime.InteropServices.Marshal.FreeHGlobal(name);}
+ }
+ static void Main(uint count,IntPtr args){handle=RegisterServiceCtrlHandler("LoliaBloomService",handler);var status=new Status{Type=0x10,State=4,Accepted=1};SetServiceStatus(handle,ref status);Trace("Running");Thread.Sleep(Timeout.Infinite);}
+ static void Handle(uint command){if(command==1){var status=new Status{Type=0x10,State=3,Checkpoint=1,WaitHint=120000};SetServiceStatus(handle,ref status);Trace("Deliberately stuck StopPending");}}
+ [System.Runtime.InteropServices.DllImport("advapi32.dll",EntryPoint="StartServiceCtrlDispatcherW",SetLastError=true)][return:System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.Bool)]static extern bool StartServiceCtrlDispatcher([System.Runtime.InteropServices.In]Entry[] entries);
+ [System.Runtime.InteropServices.DllImport("advapi32.dll",EntryPoint="RegisterServiceCtrlHandlerW",CharSet=System.Runtime.InteropServices.CharSet.Unicode,SetLastError=true)]static extern IntPtr RegisterServiceCtrlHandler(string name,HandlerCallback handler);
+ [System.Runtime.InteropServices.DllImport("advapi32.dll",SetLastError=true)][return:System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.Bool)]static extern bool SetServiceStatus(IntPtr handle,ref Status status);
 }
