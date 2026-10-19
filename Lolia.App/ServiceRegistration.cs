@@ -47,6 +47,22 @@ internal static class ServiceRegistration {
   }
   log("服务路径、普通自动启动和故障恢复已配置完成。");
  }
+ internal static void RecoverStopPending(string name,string expectedExecutable,Action<string> log){
+  using var manager=OpenSCManager(null,null,1);Check(!manager.IsInvalid,"打开服务管理器");
+  using var service=OpenService(manager,name,6);Check(!service.IsInvalid,"查询本程序服务状态");
+  Check(QueryServiceStatusEx(service,0,out var status,Marshal.SizeOf<ServiceStatusProcess>(),out _),"读取服务进程信息");
+  if(status.State!=3||status.ProcessId==0)throw new InvalidOperationException("服务停止超时，但当前状态不允许定向恢复。请重启电脑后再安装；不要手动删除配置。");
+  using var process=System.Diagnostics.Process.GetProcessById(checked((int)status.ProcessId));
+  var actual=process.MainModule?.FileName;
+  if(actual==null||!System.IO.Path.GetFullPath(actual).Equals(System.IO.Path.GetFullPath(expectedExecutable),StringComparison.OrdinalIgnoreCase))throw new InvalidOperationException("服务 PID 对应的程序路径与洛链绽放不符，已拒绝终止。请重启电脑后再安装，并提交日志。");
+  // Suppress an old recovery rule racing with replacement of the executable.
+  var empty=Marshal.AllocHGlobal(1);
+  try{var recovery=new FailureActions{ResetPeriod=86400,Count=0,Actions=empty};Check(ChangeFailureActions(service,2,ref recovery),"临时取消卡住服务的故障重启");}finally{Marshal.FreeHGlobal(empty);}
+  log($"服务停止超过 30 秒。已核对本程序服务 PID {status.ProcessId} 和文件路径，正在结束卡住的服务及其子进程；用户数据保留。");
+  process.Kill(entireProcessTree:true);if(!process.WaitForExit(10000))throw new System.TimeoutException("本程序服务进程仍未退出，请重启电脑后再安装。配置和 FRP 文件已保留。");
+ }
+ [StructLayout(LayoutKind.Sequential)]struct ServiceStatusProcess{public uint Type,State,Controls,Win32ExitCode,ServiceExitCode,CheckPoint,WaitHint,ProcessId,Flags;}
+ [DllImport("advapi32.dll",SetLastError=true)][return:MarshalAs(UnmanagedType.Bool)]static extern bool QueryServiceStatusEx(ServiceHandle service,int level,out ServiceStatusProcess status,int size,out int needed);
  static void ConfigureOptions(ServiceHandle service,Action<string> log){
   var delayed=new DelayedStart{Enabled=false};
   Check(ChangeDelayedStart(service,3,ref delayed),"设置普通自动启动标志");

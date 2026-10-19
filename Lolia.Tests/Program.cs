@@ -1,6 +1,7 @@
 using System.Net;
 using System.Text;
 using Lolia.Shared;
+if(args.Contains("--hang-stop-service")){System.ServiceProcess.ServiceBase.Run(new HangStopService());return;}
 // A noisy UTF-8 child process for the Windows service lifecycle regression test.
 if(args.Length==2&&args[0]=="-t"){
  Console.OutputEncoding=new UTF8Encoding(false);
@@ -88,3 +89,8 @@ if(args.Contains("--network-test")){
 Console.WriteLine("PASS: pagination, request methods, protocol parsing, credentials, HTTP 201, API errors, traffic sampling");
 static HttpResponseMessage Json(string data,HttpStatusCode code=HttpStatusCode.OK)=>new(code){Content=new StringContent(data,Encoding.UTF8,"application/json")};
 sealed class Fake(Func<HttpRequestMessage,Task<HttpResponseMessage>> handle):HttpMessageHandler{protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage r,CancellationToken ct)=>handle(r);}
+
+sealed class HangStopService:System.ServiceProcess.ServiceBase {
+ public HangStopService(){ServiceName="LoliaBloomService";}
+ protected override void OnStop()=>Thread.Sleep(120000);
+}

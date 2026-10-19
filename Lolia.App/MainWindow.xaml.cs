@@ -28,7 +28,7 @@ public partial class MainWindow:ChromeWindow {
  readonly Dictionary<string,CloudTunnel> cloud=new();
  LoliaApi api=null!;
  bool refreshing,signingIn;
- string? lastServiceError,lastReportedTunnelError,lastReportedServiceIssue;
+ string? lastServiceError,lastReportedTunnelError,lastReportedServiceIssue;DateTimeOffset? lastSnapshot;
  readonly HashSet<string> autoPending=new();
  string? notice;DateTimeOffset noticeUntil;
  public MainWindow(){
@@ -57,7 +57,7 @@ public partial class MainWindow:ChromeWindow {
  async Task<Reply> Send(Command c){
   await pipeGate.WaitAsync();
   try{
-   var state=ServiceState();if(state!="running")throw new InvalidOperationException(state+"。请点击一键安装后台服务，确认管理员授权。");
+   var state=ServiceState();if(state!="running")throw new InvalidOperationException(state.Contains("StopPending",StringComparison.Ordinal)?state+"。后台服务正在停止，当前无法处理命令或保存设置。请等待；若持续卡住，使用新版安装 / 修复的定向恢复，或重启电脑后再试。":state+"。请点击安装 / 修复后台服务，并允许管理员授权。");
    using var pipe=new NamedPipeClientStream(".","LoliaBloomPipe",PipeDirection.InOut,PipeOptions.Asynchronous);
    using var timeout=new CancellationTokenSource(TimeSpan.FromSeconds(c.Action.StartsWith("engine-",StringComparison.Ordinal)?180:15));
    try{
@@ -77,7 +77,7 @@ public partial class MainWindow:ChromeWindow {
   try{
    List<TunnelRow> list;
    string serviceStatus;
-   try{var r=await Send(new("list"));if(!r.Ok)throw new Exception(r.Message);list=JsonSerializer.Deserialize<List<TunnelRow>>(r.Data!,Paths.Json)??new();lastServiceError=r.Diagnostic;serviceStatus=r.Message=="OK:5"?"后台服务已连接":"后台服务需要升级，点击上方按钮更新诊断与开机连接功能";}
+   try{var r=await Send(new("list"));if(!r.Ok)throw new Exception(r.Message);list=JsonSerializer.Deserialize<List<TunnelRow>>(r.Data!,Paths.Json)??new();lastSnapshot=DateTimeOffset.Now;lastServiceError=r.Diagnostic;serviceStatus=r.Message=="OK:5"?"后台服务已连接":"后台服务需要升级，点击上方按钮更新诊断与开机连接功能";}
    catch(Exception serviceError){lastServiceError=serviceError.Message;list=cloud.Values.Select(t=>new TunnelRow{Id=t.Id,Name=t.Label,Type=t.Type,Node=t.Node,LocalAddress=t.LocalAddress,RemoteAddress=t.RemoteAddress,Description=t.Remark}).ToList();serviceStatus=serviceError.Message;}
    foreach(var t in list){if(cloudTotals.TryGetValue(t.Id,out var total)){t.TotalBytesIn=total.In;t.TotalBytesOut=total.Out;}}
    if(session!=null&&!cloudRefreshing&&DateTimeOffset.UtcNow>=nextCloudPoll)_=RefreshCloudData();
@@ -130,6 +130,7 @@ public partial class MainWindow:ChromeWindow {
  string DiagnosticReport(string title,string detail){
   var report=new StringBuilder();report.AppendLine("洛链绽放诊断报告（请连同你的操作步骤提交）");
   report.AppendLine("时间："+DateTimeOffset.Now.ToString("O"));report.AppendLine("版本："+typeof(MainWindow).Assembly.GetName().Version);report.AppendLine("系统："+Environment.OSVersion);report.AppendLine("后台服务："+ServiceState());
+  report.AppendLine("隧道快照时间："+(lastSnapshot?.ToString("O")??"尚未成功获取"));report.AppendLine("注意：下方隧道信息来自最近一次成功快照；服务停止或通信失败时，不代表当前状态。");
   report.AppendLine("问题："+title);report.AppendLine("具体错误："+detail);
   if(lastServiceError!=null)report.AppendLine("最近一次服务通信错误："+lastServiceError);
   report.AppendLine("建议处理步骤：");

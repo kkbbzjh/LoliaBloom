@@ -23,7 +23,11 @@ internal static class ServiceInstaller {
    using var service=ServiceController.GetServices().FirstOrDefault(s=>s.ServiceName.Equals(ServiceName,StringComparison.OrdinalIgnoreCase));
    if(service!=null){
     service.Refresh();Log("停止旧后台服务…");
-    if(service.Status!=ServiceControllerStatus.Stopped){if(service.Status!=ServiceControllerStatus.StopPending)service.Stop();await Task.Run(()=>service.WaitForStatus(ServiceControllerStatus.Stopped,TimeSpan.FromSeconds(30)));}
+    if(service.Status!=ServiceControllerStatus.Stopped){
+     if(service.Status!=ServiceControllerStatus.StopPending)service.Stop();
+     try{await Task.Run(()=>service.WaitForStatus(ServiceControllerStatus.Stopped,TimeSpan.FromSeconds(30)));}
+     catch(System.ServiceProcess.TimeoutException){ServiceRegistration.RecoverStopPending(ServiceName,Path.Combine(target,"Service","Lolia.Service.exe"),Log);await Task.Run(()=>service.WaitForStatus(ServiceControllerStatus.Stopped,TimeSpan.FromSeconds(15)));}
+    }
    }
    Log("复制服务文件（保留已有隧道、登录信息和 FRP 更新）…");
    foreach(var file in Directory.EnumerateFiles(source,"*",SearchOption.AllDirectories)){

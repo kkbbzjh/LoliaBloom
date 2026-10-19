@@ -114,6 +114,7 @@ jobs:
             Stop-Service LoliaBloomService
             dotnet publish Lolia.Tests/Lolia.Tests.csproj -c Release -r win-x64 --self-contained false -o process-fixture
             if ($LASTEXITCODE) { throw 'Failed to build lifecycle fixture' }
+            if (Test-Path "$engine.ci-disabled") { Move-Item "$engine.ci-disabled" $engine -Force }
             Copy-Item $engine "$engine.real" -Force
             Copy-Item process-fixture/* (Split-Path $engine) -Recurse -Force
             Copy-Item process-fixture/Lolia.Tests.exe $engine -Force
@@ -140,6 +141,23 @@ jobs:
               Start-Service LoliaBloomService
               (Get-Service LoliaBloomService).WaitForStatus('Running', [TimeSpan]::FromSeconds(30))
             }
+            # The repair must recover only our verified service when it is stuck stopping.
+            Stop-Service LoliaBloomService
+            $serviceExe = Join-Path $env:ProgramFiles 'LoliaBloom/Service/Lolia.Service.exe'
+            Copy-Item process-fixture/* (Split-Path $serviceExe) -Recurse -Force
+            Copy-Item process-fixture/Lolia.Tests.exe $serviceExe -Force
+            & sc.exe config LoliaBloomService binPath= ('"' + $serviceExe + '" --hang-stop-service')
+            if ($LASTEXITCODE) { throw 'Failed to configure stopping fixture' }
+            Start-Service LoliaBloomService
+            $stuck = Get-Service LoliaBloomService
+            $stuck.WaitForStatus('Running', [TimeSpan]::FromSeconds(30))
+            $stuck.Stop()
+            $stuck.WaitForStatus('StopPending', [TimeSpan]::FromSeconds(15))
+            $stuck.Dispose()
+            $recovery = Start-Process (Join-Path $PWD 'dist/Lolia.App.exe') -ArgumentList '--install-service','--install-log',(Join-Path $PWD 'stop-pending-recovery.log') -PassThru -Wait
+            Get-Content stop-pending-recovery.log
+            if ($recovery.ExitCode -ne 0 -or -not (Select-String -Path stop-pending-recovery.log -SimpleMatch '已核对本程序服务 PID')) { throw 'Verified StopPending recovery failed' }
+            Write-Host 'PASS: verified service PID/path recovery from a deliberately hung StopPending fixture'
             Invoke-ServiceCommand @{action='sync';value='[]'}
           } finally {
             Stop-Service LoliaBloomService -ErrorAction SilentlyContinue
