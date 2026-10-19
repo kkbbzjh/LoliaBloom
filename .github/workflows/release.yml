@@ -159,7 +159,6 @@ jobs:
             }
             $stuck = Get-Service LoliaBloomService
             $stuck.WaitForStatus('Running', [TimeSpan]::FromSeconds(30))
-            $stuck.Stop()
             $stuck.WaitForStatus('StopPending', [TimeSpan]::FromSeconds(15))
             $stuck.Dispose()
             $recovery = Start-Process (Join-Path $PWD 'dist/Lolia.App.exe') -ArgumentList '--install-service','--install-log',(Join-Path $PWD 'stop-pending-recovery.log') -PassThru -Wait
