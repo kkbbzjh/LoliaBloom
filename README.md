@@ -50,12 +50,12 @@ Screenshots are rendered by the Windows client using example tunnels and traffic
 
 #### Single EXE (recommended)
 
-1. Open [GitHub Releases](https://github.com/kkbbzjh/LoliaBloom/releases/latest) and download `LoliaBloom-v0.7.17-win-x64.exe`. Users in China can also use [Lanzou Cloud](https://listenscript.lanzouc.com/b0umm01ub).
+1. Open [GitHub Releases](https://github.com/kkbbzjh/LoliaBloom/releases/latest) and download `LoliaBloom-v0.7.18-win-x64.exe`. Users in China can also use [Lanzou Cloud](https://listenscript.lanzouc.com/b0umm01ub).
 2. Double-click to run. If .NET 10 Desktop Runtime is missing, the launcher offers to open Microsoft's official download page. Install it, then run the EXE again.
 
 #### ZIP version
 
-Alternatively, download `LoliaBloom-v0.7.17-win-x64.zip`, extract it, and run `Lolia.App.exe`. This smaller ZIP requires .NET 10 Desktop Runtime; [download it from Microsoft](https://dotnet.microsoft.com/download/dotnet/10.0) if it is not installed. The EXE opens Microsoft's download page when the runtime is missing.
+Alternatively, download `LoliaBloom-v0.7.18-win-x64.zip`, extract it, and run `Lolia.App.exe`. This smaller ZIP requires .NET 10 Desktop Runtime; [download it from Microsoft](https://dotnet.microsoft.com/download/dotnet/10.0) if it is not installed. The EXE opens Microsoft's download page when the runtime is missing.
 
 #### Install the background service
 

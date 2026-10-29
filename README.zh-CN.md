@@ -50,12 +50,12 @@
 
 #### 单文件版（推荐）
 
-1. 打开 [GitHub Releases 下载页](https://github.com/kkbbzjh/LoliaBloom/releases/latest)，下载 `LoliaBloom-v0.7.17-win-x64.exe`；国内也可使用[蓝奏云下载](https://listenscript.lanzouc.com/b0umm01ub)。
+1. 打开 [GitHub Releases 下载页](https://github.com/kkbbzjh/LoliaBloom/releases/latest)，下载 `LoliaBloom-v0.7.18-win-x64.exe`；国内也可使用[蓝奏云下载](https://listenscript.lanzouc.com/b0umm01ub)。
 2. 双击运行即可。如果没有 .NET 10 Desktop Runtime，可选择打开微软官方下载页；安装后重新运行软件。
 
 #### ZIP 版
 
-也可以下载 `LoliaBloom-v0.7.17-win-x64.zip`，解压后运行其中的 `Lolia.App.exe`。精简 ZIP 需要 .NET 10 Desktop Runtime；如未安装，可从[微软官网下载](https://dotnet.microsoft.com/download/dotnet/10.0)。单文件 EXE 检测到缺少运行时后会打开微软官方下载页。
+也可以下载 `LoliaBloom-v0.7.18-win-x64.zip`，解压后运行其中的 `Lolia.App.exe`。精简 ZIP 需要 .NET 10 Desktop Runtime；如未安装，可从[微软官网下载](https://dotnet.microsoft.com/download/dotnet/10.0)。单文件 EXE 检测到缺少运行时后会打开微软官方下载页。
 
 #### 安装后台服务
 

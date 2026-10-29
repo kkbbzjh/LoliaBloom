@@ -37,7 +37,7 @@ public partial class MainWindow:ChromeWindow {
  string? notice;DateTimeOffset noticeUntil;
  public MainWindow(){
   InitializeComponent();AppVersion.Text="v"+(typeof(MainWindow).Assembly.GetName().Version?.ToString(3)??"未知");UploadChart.LineBrush=new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(133,101,165));api=new LoliaApi(http,GetAccessToken);
-  Loaded+=async(_,_)=>{_=CompleteUpdateHandoff();_=CheckAppUpdate(false);UpdateCheckinUi();checkinPoller.Tick+=(_,_)=>UpdateCheckinUi();checkinPoller.Start();if(session!=null)await Safe(Sync);else await Refresh();poller.Tick+=async(_,_)=>await Refresh();poller.Start();};Closed+=(_,_)=>{poller.Stop();checkinPoller.Stop();CheckinBrowser.Dispose();details?.Close();};
+  Loaded+=async(_,_)=>{if(Environment.GetCommandLineArgs().Contains("--checkin-page-test"))_=RunCheckinPageTest();_=CompleteUpdateHandoff();_=CheckAppUpdate(false);UpdateCheckinUi();checkinPoller.Tick+=(_,_)=>UpdateCheckinUi();checkinPoller.Start();if(session!=null)await Safe(Sync);else await Refresh();poller.Tick+=async(_,_)=>await Refresh();poller.Start();};Closed+=(_,_)=>{poller.Stop();checkinPoller.Stop();CheckinBrowser.Dispose();if(checkinPageOwnsBrowser)WebCheckinWindow.ResumeIfEnabled();details?.Close();};
  }
  async Task<string> GetAccessToken(){
   await authGate.WaitAsync();
@@ -77,7 +77,7 @@ public partial class MainWindow:ChromeWindow {
   }finally{pipeGate.Release();}
  }
  async Task Refresh(){
-  CheckinStatus.Text=WebCheckinSettings.Summary();
+
   if(refreshing||installingService||autoPending.Count>0)return;refreshing=true;
   try{
    List<TunnelRow> list;
@@ -128,19 +128,31 @@ public partial class MainWindow:ChromeWindow {
     await limit.WaitAsync();try{return (Id:c.Id,Sample:await api.Traffic(c.CloudName));}finally{limit.Release();}
    });
    var samples=await Task.WhenAll(requests);foreach(var item in samples)cloudTotals[item.Id]=item.Sample;
-   CheckinStatus.Text=WebCheckinSettings.Summary();
-  }catch(Exception e){CheckinStatus.Text="平台状态："+e.Message;}finally{cloudRefreshing=false;}
+
+  }catch(Exception e){AccountTrafficStatus.Text="平台状态："+e.Message;}finally{cloudRefreshing=false;}
  }
  async Task Safe(Func<Task> f){try{await f();}catch(Exception e){ShowDiagnostics("操作未完成",e.ToString());}}
- bool checkinBrowserReady,checkinBrowserLoading;
+ async Task RunCheckinPageTest(){
+  var args=Environment.GetCommandLineArgs();var log=args[Array.IndexOf(args,"--checkin-page-test")+1];
+  try{await Task.Delay(1500);CheckinPageExpander.IsExpanded=true;await Task.Delay(1000);await checkinPageGate.WaitAsync();checkinPageGate.Release();
+   for(var n=0;n<45;n++){if(checkinBrowserReady&&CheckinPageStatus.Text=="官网登录状态保存在本机"){var count=await CheckinBrowser.ExecuteScriptAsync("document.body.innerText.length");if(int.TryParse(count,out var length)&&length>100){File.WriteAllText(log,"PASS: live official website navigation and nonempty DOM inside main window; existing login profile preserved.");Close();return;}}await Task.Delay(1000);}
+   throw new Exception(CheckinPageStatus.Text);
+  }catch(Exception ex){File.WriteAllText(log,"FAIL: "+ex);Close();}
+ }
+ bool checkinBrowserReady,checkinBrowserLoading,checkinPageOwnsBrowser;
+ readonly SemaphoreSlim checkinPageGate=new(1,1);
  async void CheckinPage_Expanded(object s,RoutedEventArgs e){
   if(Environment.GetCommandLineArgs().Any(x=>x.Contains("screenshot")||x=="--layout-self-test"||x=="--self-test"||x=="--update-smoke"))return;
-  await InitializeCheckinBrowser();
+  await checkinPageGate.WaitAsync();try{await InitializeCheckinBrowser();}finally{checkinPageGate.Release();}
+ }
+ async void CheckinPage_Collapsed(object s,RoutedEventArgs e){
+  await checkinPageGate.WaitAsync();try{if(checkinPageOwnsBrowser){CheckinBrowser.Dispose();CheckinBrowserHost.Child=null;checkinBrowserReady=false;checkinPageOwnsBrowser=false;WebCheckinWindow.ResumeIfEnabled();}}catch(Exception ex){ShowDiagnostics("恢复后台签到失败",ex.ToString());}finally{checkinPageGate.Release();}
  }
  async Task InitializeCheckinBrowser(){
   if(checkinBrowserLoading)return;if(checkinBrowserReady){CheckinBrowser.Reload();return;}
   checkinBrowserLoading=true;CheckinPageStatus.Text="正在加载官网…";
   try{
+   await WebCheckinWindow.StopForUpdate();checkinPageOwnsBrowser=true;CheckinBrowser.Dispose();CheckinBrowser=new WebView2{Height=320};CheckinBrowserHost.Child=CheckinBrowser;
    var env=await CoreWebView2Environment.CreateAsync(null,Path.Combine(WebCheckinSettings.Root,"browser"));
    await CheckinBrowser.EnsureCoreWebView2Async(env).WaitAsync(TimeSpan.FromSeconds(30));
    CheckinBrowser.CoreWebView2.Settings.AreDevToolsEnabled=false;
@@ -152,7 +164,7 @@ public partial class MainWindow:ChromeWindow {
   finally{checkinBrowserLoading=false;}
  }
  void UpdateCheckinUi(){var state=WebCheckinSettings.Load();CheckinToggle.IsChecked=state.Enabled;var countdown=state.Countdown();var success=state.LastSuccess is {} at?"上次成功 "+at.ToLocalTime().ToString("MM-dd HH:mm"):"首次使用请先登录官网";CheckinMainStatus.Text=string.Join(" · ",new[]{state.Status,countdown,success}.Where(x=>!string.IsNullOrWhiteSpace(x)));if(state.Status!=lastCheckinUiStatus&&state.Status.Contains("需要在下方登录官网",StringComparison.Ordinal))CheckinPageExpander.IsExpanded=true;lastCheckinUiStatus=state.Status;CheckinPageButton.Content=CheckinPageExpander.IsExpanded?"收起官网":"官网登录";CheckinStatus.Text=state.Enabled?"签到后台运行中":"自动签到已关闭";}
- void CheckinToggle_Click(object s,RoutedEventArgs e){try{WebCheckinWindow.SetEnabledFromMain(CheckinToggle.IsChecked==true);UpdateCheckinUi();}catch(Exception ex){CheckinToggle.IsChecked=WebCheckinSettings.Load().Enabled;ShowDiagnostics("自动签到设置未保存",ex.ToString());}}
+ void CheckinToggle_Click(object s,RoutedEventArgs e){try{WebCheckinWindow.SetEnabledFromMain(CheckinToggle.IsChecked==true,!checkinPageOwnsBrowser);UpdateCheckinUi();}catch(Exception ex){CheckinToggle.IsChecked=WebCheckinSettings.Load().Enabled;ShowDiagnostics("自动签到设置未保存",ex.ToString());}}
  void CheckinPage_Click(object s,RoutedEventArgs e){CheckinPageExpander.IsExpanded=!CheckinPageExpander.IsExpanded;CheckinPageButton.Content=CheckinPageExpander.IsExpanded?"收起官网":"官网登录";}
  string DiagnosticReport(string title,string detail){
   var report=new StringBuilder();report.AppendLine("洛链绽放诊断报告（请连同你的操作步骤提交）");
@@ -313,7 +325,7 @@ public partial class MainWindow:ChromeWindow {
  void Details_Click(object s,RoutedEventArgs e){
   try{var row=Selected();if(details?.TunnelId==row.Id){details.Activate();return;}details?.Close();var dialog=new TunnelDetailsWindow(row){Owner=this};details=dialog;dialog.Closed+=(_,_)=>{if(details==dialog)details=null;};dialog.Show();}catch(Exception ex){Status.Text=ex.Message;}
  }
- void Checkin_Click(object s,RoutedEventArgs e){try{WebCheckinWindow.RequestCheckFromMain();UpdateCheckinUi();}catch(Exception ex){ShowDiagnostics("无法执行自动签到检查",ex.ToString());}}
+ void Checkin_Click(object s,RoutedEventArgs e){try{CheckinPageExpander.IsExpanded=false;WebCheckinWindow.RequestCheckFromMain(!checkinPageOwnsBrowser);UpdateCheckinUi();}catch(Exception ex){ShowDiagnostics("无法执行自动签到检查",ex.ToString());}}
  void CopyAddress_Click(object s,RoutedEventArgs e){if(s is System.Windows.Controls.Button b&&b.Tag is string value)CopyAddress(value);}
  void CopySelected_Click(object s,RoutedEventArgs e){try{CopyAddress(Selected().RemoteAddress);}catch(Exception ex){MessageBox.Show(ex.Message);}}
  void CopyAddress(string? value){if(string.IsNullOrWhiteSpace(value))return;try{Clipboard.SetText(value);Status.Text="已复制访问地址："+value;}catch(Exception ex){MessageBox.Show("暂时无法写入剪贴板："+ex.Message);}}

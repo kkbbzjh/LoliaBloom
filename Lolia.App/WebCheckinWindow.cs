@@ -25,8 +25,8 @@ public sealed class WebCheckinWindow:Window {
  (bool Ok,int Http,string? Gb)? lastResult;
  public static void Launch(bool show){var p=new ProcessStartInfo(Environment.ProcessPath!){UseShellExecute=false};p.ArgumentList.Add(show?"--checkin-open":"--checkin-worker");Process.Start(p)?.Dispose();}
  public static void ResumeIfEnabled(){if(WebCheckinSettings.Load().Enabled)Launch(false);}
- public static void SetEnabledFromMain(bool enabled){var state=WebCheckinSettings.Load();state.Enabled=enabled;state.NextCheck=DateTimeOffset.UtcNow;state.Status=enabled?"已开启，正在检查官网登录状态。":"已关闭，不再自动签到。";state.Save();ConfigureStartup(enabled);if(enabled)Launch(false);else try{using var signal=EventWaitHandle.OpenExisting("Local\\LoliaBloomWebCheckinStop");signal.Set();}catch(WaitHandleCannotBeOpenedException){}}
- public static void RequestCheckFromMain(){var state=WebCheckinSettings.Load();state.NextCheck=DateTimeOffset.UtcNow;state.Save();if(state.Enabled)Launch(false);}
+ public static void SetEnabledFromMain(bool enabled,bool startWorker=true){var state=WebCheckinSettings.Load();state.Enabled=enabled;state.NextCheck=DateTimeOffset.UtcNow;state.Status=enabled?"已开启，正在检查官网登录状态。":"已关闭，不再自动签到。";state.Save();ConfigureStartup(enabled);if(enabled){if(startWorker)Launch(false);}else try{using var signal=EventWaitHandle.OpenExisting("Local\\LoliaBloomWebCheckinStop");signal.Set();}catch(WaitHandleCannotBeOpenedException){}}
+ public static void RequestCheckFromMain(bool startWorker=true){var state=WebCheckinSettings.Load();state.NextCheck=DateTimeOffset.UtcNow;state.Save();if(state.Enabled&&startWorker)Launch(false);}
  public static void StartWorker(bool show){
   singleton=new Mutex(true,MutexName,out var first);
   if(!first){if(show){try{using var signal=EventWaitHandle.OpenExisting(OpenEvent);signal.Set();}catch(WaitHandleCannotBeOpenedException){MessageBox.Show("自动签到正在启动，请稍后再打开。");}}Application.Current.Shutdown();return;}
