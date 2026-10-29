@@ -89,7 +89,7 @@ public partial class MainWindow:ChromeWindow {
    if(!installingService){
     var ready=serviceStatus=="后台服务已连接";
     if(ready&&list.Any(t=>t.Running&&string.IsNullOrWhiteSpace(t.MetricsSource)))ready=false;
-    ServiceGuide.Visibility=ready&&installLogPath==null?Visibility.Collapsed:Visibility.Visible;
+    ServiceGuide.Visibility=InstallLogPanel.IsExpanded||ServiceState()=="尚未安装后台服务"?Visibility.Visible:Visibility.Collapsed;
     ServiceButton.Content=ready?"✓ 后台服务已就绪":"① 安装 / 修复后台服务";
     if(!ready&&installLogPath==null&&!GuideTitle.Text.StartsWith("安装未完成",StringComparison.Ordinal)){
      var state=ServiceState();
@@ -157,11 +157,11 @@ public partial class MainWindow:ChromeWindow {
   return System.Text.RegularExpressions.Regex.Replace(text,@"(?i)(token|password|authorization|secret)([\s:=]+)[^\s,;]+","$1$2[REDACTED]");
  }
  void ShowDiagnostics(string title,string detail,bool reveal=false){
-  ServiceGuide.Visibility=Visibility.Visible;GuideTitle.Text=title;GuideDescription.Text="请查看下方具体错误与处理建议。可一键复制诊断报告，保留此报告提交 BUG。";
+  ServiceGuide.Visibility=reveal?Visibility.Visible:Visibility.Collapsed;GuideTitle.Text=title;GuideDescription.Text="请查看下方具体错误与处理建议。可一键复制诊断报告，保留此报告提交 BUG。";
   InstallLogPanel.Visibility=Visibility.Visible;InstallLogPanel.IsExpanded=reveal;InstallLogText.Text=DiagnosticReport(title,detail);if(!reveal)Status.Text=title+"；点击“诊断与报错”查看详情。";
   try{var folder=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"LoliaBloom","logs");Directory.CreateDirectory(folder);installLogPath=Path.Combine(folder,"diagnostic-"+DateTime.Now.ToString("yyyyMMdd-HHmmss")+".log");File.WriteAllText(installLogPath,InstallLogText.Text);}catch(Exception ex){Status.Text=title+"；日志保存失败："+ex.Message;}
  }
- void Diagnostics_Click(object s,RoutedEventArgs e){if(InstallLogPanel.Visibility==Visibility.Visible&&InstallLogPanel.IsExpanded){InstallLogPanel.IsExpanded=false;return;}if(InstallLogPanel.Visibility==Visibility.Visible&&InstallLogText.Text.Length>0){ServiceGuide.Visibility=Visibility.Visible;InstallLogPanel.IsExpanded=true;return;}ShowDiagnostics("手动查看诊断", "请描述刚才执行了什么操作、预期行为和实际表现。",true);}
+ void Diagnostics_Click(object s,RoutedEventArgs e){if(InstallLogPanel.Visibility==Visibility.Visible&&InstallLogPanel.IsExpanded){InstallLogPanel.IsExpanded=false;ServiceGuide.Visibility=Visibility.Collapsed;return;}if(InstallLogPanel.Visibility==Visibility.Visible&&InstallLogText.Text.Length>0){ServiceGuide.Visibility=Visibility.Visible;InstallLogPanel.IsExpanded=true;return;}ShowDiagnostics("手动查看诊断", "请描述刚才执行了什么操作、预期行为和实际表现。",true);}
  void DismissDiagnostics_Click(object s,RoutedEventArgs e){installLogPath=null;InstallLogPanel.Visibility=Visibility.Collapsed;ServiceGuide.Visibility=Visibility.Collapsed;}
 
  async void Refresh_Click(object s,RoutedEventArgs e){nextCloudPoll=DateTimeOffset.MinValue;await Safe(Refresh);}
@@ -265,7 +265,7 @@ public partial class MainWindow:ChromeWindow {
    await finish;InstallLogText.Text=await File.ReadAllTextAsync(installLogPath);InstallLogText.ScrollToEnd();
    if(process.ExitCode!=0)throw new Exception("安装失败（退出码 "+process.ExitCode+"）。请查看下方完整日志，或点击“复制日志”发给我排查。");
    var reply=await Send(new("list"));if(!reply.Ok)throw new Exception(reply.Message);verified=true;
-   GuideTitle.Text="后台服务安装成功";GuideDescription.Text="服务已启动，连接验证通过。安装日志已自动保存。";InstallLogPanel.IsExpanded=false;ServiceButton.Content="✓ 后台服务已就绪";
+   GuideTitle.Text="后台服务安装成功";GuideDescription.Text="服务已启动，连接验证通过。安装日志已自动保存。";InstallLogPanel.IsExpanded=false;ServiceGuide.Visibility=Visibility.Collapsed;ServiceButton.Content="✓ 后台服务已就绪";
    notice="后台服务安装成功，连接验证通过";noticeUntil=DateTimeOffset.UtcNow.AddSeconds(30);Status.Text=notice;
    if(session!=null)await Sync();
   }catch(Exception ex){
