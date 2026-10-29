@@ -37,7 +37,7 @@ public partial class MainWindow:ChromeWindow {
  string? notice;DateTimeOffset noticeUntil;
  public MainWindow(){
   InitializeComponent();AppVersion.Text="v"+(typeof(MainWindow).Assembly.GetName().Version?.ToString(3)??"未知");UploadChart.LineBrush=new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(133,101,165));api=new LoliaApi(http,GetAccessToken);
-  Loaded+=async(_,_)=>{_=CompleteUpdateHandoff();_=CheckAppUpdate(false);if(!Environment.GetCommandLineArgs().Any(x=>x.Contains("screenshot")||x=="--layout-self-test"||x=="--self-test"||x=="--update-smoke"))await InitializeCheckinBrowser();UpdateCheckinUi();checkinPoller.Tick+=(_,_)=>UpdateCheckinUi();checkinPoller.Start();if(session!=null)await Safe(Sync);else await Refresh();poller.Tick+=async(_,_)=>await Refresh();poller.Start();};Closed+=(_,_)=>{poller.Stop();checkinPoller.Stop();CheckinBrowser.Dispose();details?.Close();};
+  Loaded+=async(_,_)=>{_=CompleteUpdateHandoff();_=CheckAppUpdate(false);UpdateCheckinUi();checkinPoller.Tick+=(_,_)=>UpdateCheckinUi();checkinPoller.Start();if(session!=null)await Safe(Sync);else await Refresh();poller.Tick+=async(_,_)=>await Refresh();poller.Start();};Closed+=(_,_)=>{poller.Stop();checkinPoller.Stop();CheckinBrowser.Dispose();details?.Close();};
  }
  async Task<string> GetAccessToken(){
   await authGate.WaitAsync();
@@ -132,7 +132,25 @@ public partial class MainWindow:ChromeWindow {
   }catch(Exception e){CheckinStatus.Text="平台状态："+e.Message;}finally{cloudRefreshing=false;}
  }
  async Task Safe(Func<Task> f){try{await f();}catch(Exception e){ShowDiagnostics("操作未完成",e.ToString());}}
- async Task InitializeCheckinBrowser(){try{var env=await CoreWebView2Environment.CreateAsync(null,Path.Combine(WebCheckinSettings.Root,"browser"));await CheckinBrowser.EnsureCoreWebView2Async(env);CheckinBrowser.CoreWebView2.Settings.AreDevToolsEnabled=false;CheckinBrowser.CoreWebView2.NewWindowRequested+=(_,e)=>{e.Handled=true;if(Uri.TryCreate(e.Uri,UriKind.Absolute,out var uri)&&uri.Scheme=="https")Process.Start(new ProcessStartInfo(uri.AbsoluteUri){UseShellExecute=true});};CheckinBrowser.Source=new Uri("https://dash.lolia.link/dash");}catch(Exception ex){CheckinMainStatus.Text="官网页面无法打开：请安装 Microsoft Edge WebView2 Runtime，或查看诊断报告。";ShowDiagnostics("无法打开官网签到页面",ex.ToString());}}
+ bool checkinBrowserReady,checkinBrowserLoading;
+ async void CheckinPage_Expanded(object s,RoutedEventArgs e){
+  if(Environment.GetCommandLineArgs().Any(x=>x.Contains("screenshot")||x=="--layout-self-test"||x=="--self-test"||x=="--update-smoke"))return;
+  await InitializeCheckinBrowser();
+ }
+ async Task InitializeCheckinBrowser(){
+  if(checkinBrowserLoading)return;if(checkinBrowserReady){CheckinBrowser.Reload();return;}
+  checkinBrowserLoading=true;CheckinPageStatus.Text="正在加载官网…";
+  try{
+   var env=await CoreWebView2Environment.CreateAsync(null,Path.Combine(WebCheckinSettings.Root,"browser"));
+   await CheckinBrowser.EnsureCoreWebView2Async(env).WaitAsync(TimeSpan.FromSeconds(30));
+   CheckinBrowser.CoreWebView2.Settings.AreDevToolsEnabled=false;
+   CheckinBrowser.CoreWebView2.NavigationStarting+=(_,_)=>CheckinPageStatus.Text="正在加载官网…";
+   CheckinBrowser.CoreWebView2.NavigationCompleted+=(_,e)=>CheckinPageStatus.Text=e.IsSuccess?"官网登录状态保存在本机":"官网加载失败："+e.WebErrorStatus+"。收起后重新展开可重试。";
+   CheckinBrowser.CoreWebView2.NewWindowRequested+=(_,e)=>{e.Handled=true;if(Uri.TryCreate(e.Uri,UriKind.Absolute,out var uri)&&uri.Scheme=="https")CheckinBrowser.CoreWebView2.Navigate(uri.AbsoluteUri);};
+   checkinBrowserReady=true;CheckinBrowser.Source=new Uri("https://dash.lolia.link/dash");
+  }catch(Exception ex){CheckinPageStatus.Text="官网无法加载，请确认网络与 WebView2 运行环境；收起后重新展开可重试。";ShowDiagnostics("无法打开官网签到页面",ex.ToString());}
+  finally{checkinBrowserLoading=false;}
+ }
  void UpdateCheckinUi(){var state=WebCheckinSettings.Load();CheckinToggle.IsChecked=state.Enabled;var countdown=state.Countdown();var success=state.LastSuccess is {} at?"上次成功 "+at.ToLocalTime().ToString("MM-dd HH:mm"):"首次使用请先登录官网";CheckinMainStatus.Text=string.Join(" · ",new[]{state.Status,countdown,success}.Where(x=>!string.IsNullOrWhiteSpace(x)));if(state.Status!=lastCheckinUiStatus&&state.Status.Contains("需要在下方登录官网",StringComparison.Ordinal))CheckinPageExpander.IsExpanded=true;lastCheckinUiStatus=state.Status;CheckinPageButton.Content=CheckinPageExpander.IsExpanded?"收起官网":"官网登录";CheckinStatus.Text=state.Enabled?"签到后台运行中":"自动签到已关闭";}
  void CheckinToggle_Click(object s,RoutedEventArgs e){try{WebCheckinWindow.SetEnabledFromMain(CheckinToggle.IsChecked==true);UpdateCheckinUi();}catch(Exception ex){CheckinToggle.IsChecked=WebCheckinSettings.Load().Enabled;ShowDiagnostics("自动签到设置未保存",ex.ToString());}}
  void CheckinPage_Click(object s,RoutedEventArgs e){CheckinPageExpander.IsExpanded=!CheckinPageExpander.IsExpanded;CheckinPageButton.Content=CheckinPageExpander.IsExpanded?"收起官网":"官网登录";}
