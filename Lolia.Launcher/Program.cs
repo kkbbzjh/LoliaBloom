@@ -5,6 +5,7 @@ using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 
 try {
+ if(FindDesktopRuntime()==null){var answer=Native.MessageBox(IntPtr.Zero,"本机缺少 .NET 10 Desktop Runtime。选择“是”打开微软官方下载页；安装完成后重新运行洛链绽放。","洛链绽放 · 需要运行环境",0x24);if(answer==6)try{Process.Start(new ProcessStartInfo("https://dotnet.microsoft.com/download/dotnet/10.0"){UseShellExecute=true});}catch{}return 1;}
  using var payload=Assembly.GetExecutingAssembly().GetManifestResourceStream("LoliaBloom.Payload")??throw new Exception("程序运行文件缺失");
  var hash=Convert.ToHexString(SHA256.HashData(payload));payload.Position=0;
  var root=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"LoliaBloom","versions");
@@ -41,6 +42,19 @@ try {
  if(args.Contains("--self-test")){using var timeout=new CancellationTokenSource(TimeSpan.FromSeconds(45));await app.WaitForExitAsync(timeout.Token);return app.ExitCode;}
  return 0;
 }catch(Exception e){Native.MessageBox(IntPtr.Zero,e.Message,"洛链绽放",0x10);return 1;}
+
+static string? FindDesktopRuntime(){
+ var roots=new List<string>();
+ foreach(var key in new[]{"DOTNET_ROOT_X64","DOTNET_ROOT"})if(Environment.GetEnvironmentVariable(key) is {} value)roots.Add(value);
+ roots.Add(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),"dotnet"));
+ roots.Add(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"LoliaBloom","dotnet"));
+ foreach(var root in roots.Distinct(StringComparer.OrdinalIgnoreCase)){
+  var desktop=Path.Combine(root,"shared","Microsoft.WindowsDesktop.App");var core=Path.Combine(root,"shared","Microsoft.NETCore.App");if(!Directory.Exists(desktop)||!Directory.Exists(core))continue;
+  var hasDesktop=Directory.EnumerateDirectories(desktop).Any(d=>Version.TryParse(Path.GetFileName(d),out var v)&&v.Major==10);var hasCore=Directory.EnumerateDirectories(core).Any(d=>Version.TryParse(Path.GetFileName(d),out var v)&&v.Major==10);if(hasDesktop&&hasCore)return root;
+ }
+ return null;
+}
+
 static partial class Native{
  [DllImport("user32.dll",CharSet=CharSet.Unicode)]internal static extern int MessageBox(IntPtr h,string text,string caption,uint type);
 }

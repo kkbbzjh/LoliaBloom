@@ -29,14 +29,14 @@ Screenshots are rendered by the Windows client using example tunnels and traffic
 - **Cloud tunnel creation** — select a node and create TCP, UDP, HTTP or HTTPS tunnels.
 - **Saved login** — click Login to authorize with the official website; OAuth PKCE, encrypted credentials and automatic token refresh.
 - **Local network rates** — live 60-second upload/download charts, refreshed every second with per-process Windows ETW counters. Excludes loopback and backend traffic; includes FRP transport overhead. Platform totals remain separate.
-- **Automatic website check-in (Windows)**: sign in in the main window, then enable background check-in with a persistent 24-hour countdown, Windows sign-in startup and copyable diagnostics. Login expiry or verification needs user attention. Linux retains the official website link.
+- **Automatic website check-in (Windows)**: a compact status and switch stay in the main window; open the embedded website only when signing in or handling login expiry. Background check-in keeps a persistent 24-hour countdown, Windows sign-in startup and copyable diagnostics. Linux retains the official website link.
 
 - **Pink interface** — a clean tunnel list with per-tunnel start and stop buttons.
 - **Tunnel details** — a live card view of rates, traffic trends, platform totals, startup state and copyable access addresses.
 - **Background service** — keep tunnel processes running after closing the window.
 - **One-click service installation** — install or remove the Windows Service from the app with administrator approval.
 - **Start with Windows** — independent capsule switches for each tunnel; settings survive cloud sync and service restarts, with retries when the initial connection fails.
-- **Single EXE for Windows x64** — run one file; the included runtime is prepared automatically. A ZIP alternative is also available.
+- **Single EXE for Windows x64, under 100 MB** — if the Microsoft .NET 10 Desktop Runtime is missing, the launcher opens Microsoft's official download page. A smaller framework-dependent ZIP is also available.
 - **Linux web manager** — deploy with Docker Compose, sign in to the management page, sync cloud tunnels, start or stop tunnels individually, set per-tunnel startup behavior, and install verified FRP updates.
 - **Docker traffic charts** — show the last 60 seconds of container-interface traffic, including web management traffic; official cumulative tunnel traffic is displayed separately.
 
@@ -50,12 +50,12 @@ Screenshots are rendered by the Windows client using example tunnels and traffic
 
 #### Single EXE (recommended)
 
-1. Open [GitHub Releases](https://github.com/kkbbzjh/LoliaBloom/releases/latest) and download `LoliaBloom-v0.7.15-win-x64.exe`. Users in China can also use [Lanzou Cloud](https://listenscript.lanzouc.com/b0umm01ub).
-2. Double-click to run. No separate .NET installation is required.
+1. Open [GitHub Releases](https://github.com/kkbbzjh/LoliaBloom/releases/latest) and download `LoliaBloom-v0.7.16-win-x64.exe`. Users in China can also use [Lanzou Cloud](https://listenscript.lanzouc.com/b0umm01ub).
+2. Double-click to run. If .NET 10 Desktop Runtime is missing, the launcher offers to open Microsoft's official download page. Install it, then run the EXE again.
 
 #### ZIP version
 
-Alternatively, download `LoliaBloom-v0.7.15-win-x64.zip`, extract it, and run `Lolia.App.exe`.
+Alternatively, download `LoliaBloom-v0.7.16-win-x64.zip`, extract it, and run `Lolia.App.exe`. This smaller ZIP requires .NET 10 Desktop Runtime; [download it from Microsoft](https://dotnet.microsoft.com/download/dotnet/10.0) if it is not installed. The EXE opens Microsoft's download page when the runtime is missing.
 
 #### Install the background service
 

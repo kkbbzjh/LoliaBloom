@@ -27,6 +27,7 @@ public partial class MainWindow:ChromeWindow {
  readonly System.Windows.Threading.DispatcherTimer checkinPoller=new(){Interval=TimeSpan.FromSeconds(1)};
  readonly Dictionary<string,TrafficSample> cloudTotals=new();
  bool cloudRefreshing;
+ string? lastCheckinUiStatus;
  DateTimeOffset nextCloudPoll=DateTimeOffset.MinValue;
  readonly Dictionary<string,CloudTunnel> cloud=new();
  LoliaApi api=null!;
@@ -132,8 +133,9 @@ public partial class MainWindow:ChromeWindow {
  }
  async Task Safe(Func<Task> f){try{await f();}catch(Exception e){ShowDiagnostics("操作未完成",e.ToString());}}
  async Task InitializeCheckinBrowser(){try{var env=await CoreWebView2Environment.CreateAsync(null,Path.Combine(WebCheckinSettings.Root,"browser"));await CheckinBrowser.EnsureCoreWebView2Async(env);CheckinBrowser.CoreWebView2.Settings.AreDevToolsEnabled=false;CheckinBrowser.CoreWebView2.NewWindowRequested+=(_,e)=>{e.Handled=true;if(Uri.TryCreate(e.Uri,UriKind.Absolute,out var uri)&&uri.Scheme=="https")Process.Start(new ProcessStartInfo(uri.AbsoluteUri){UseShellExecute=true});};CheckinBrowser.Source=new Uri("https://dash.lolia.link/dash");}catch(Exception ex){CheckinMainStatus.Text="官网页面无法打开：请安装 Microsoft Edge WebView2 Runtime，或查看诊断报告。";ShowDiagnostics("无法打开官网签到页面",ex.ToString());}}
- void UpdateCheckinUi(){var state=WebCheckinSettings.Load();CheckinToggle.IsChecked=state.Enabled;var countdown=state.Countdown();CheckinMainStatus.Text=state.Status+(string.IsNullOrWhiteSpace(countdown)?"":"\n"+countdown)+(state.LastSuccess is {} success?"\n上次成功："+success.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss"):"");CheckinStatus.Text=state.Enabled?"签到后台运行中":"自动签到已关闭";}
+ void UpdateCheckinUi(){var state=WebCheckinSettings.Load();CheckinToggle.IsChecked=state.Enabled;var countdown=state.Countdown();var success=state.LastSuccess is {} at?"上次成功 "+at.ToLocalTime().ToString("MM-dd HH:mm"):"首次使用请先登录官网";CheckinMainStatus.Text=string.Join(" · ",new[]{state.Status,countdown,success}.Where(x=>!string.IsNullOrWhiteSpace(x)));if(state.Status!=lastCheckinUiStatus&&state.Status.Contains("需要在下方登录官网",StringComparison.Ordinal))CheckinPageExpander.IsExpanded=true;lastCheckinUiStatus=state.Status;CheckinPageButton.Content=CheckinPageExpander.IsExpanded?"收起官网":"官网登录";CheckinStatus.Text=state.Enabled?"签到后台运行中":"自动签到已关闭";}
  void CheckinToggle_Click(object s,RoutedEventArgs e){try{WebCheckinWindow.SetEnabledFromMain(CheckinToggle.IsChecked==true);UpdateCheckinUi();}catch(Exception ex){CheckinToggle.IsChecked=WebCheckinSettings.Load().Enabled;ShowDiagnostics("自动签到设置未保存",ex.ToString());}}
+ void CheckinPage_Click(object s,RoutedEventArgs e){CheckinPageExpander.IsExpanded=!CheckinPageExpander.IsExpanded;CheckinPageButton.Content=CheckinPageExpander.IsExpanded?"收起官网":"官网登录";}
  string DiagnosticReport(string title,string detail){
   var report=new StringBuilder();report.AppendLine("洛链绽放诊断报告（请连同你的操作步骤提交）");
   report.AppendLine("时间："+DateTimeOffset.Now.ToString("O"));report.AppendLine("版本："+typeof(MainWindow).Assembly.GetName().Version);report.AppendLine("系统："+Environment.OSVersion);report.AppendLine("后台服务："+ServiceState());

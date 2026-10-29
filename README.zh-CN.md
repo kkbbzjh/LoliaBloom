@@ -29,14 +29,14 @@
 - **云端创建隧道**：选择节点，创建 TCP、UDP、HTTP、HTTPS 隧道。
 - **记住登录**：点击登录即可跳转官方授权，支持 OAuth PKCE、Windows 加密保存与自动刷新令牌。
 - **本地实时速率**：最近 60 秒上传、下载折线图，Windows ETW 按 FRP 进程统计，每秒刷新；排除回环及业务端流量，包含协议开销。平台累计流量单独展示。
-- **自动网页签到（Windows）**：在主窗口内登录官网并开启后台定时签到；记录成功时间，显示 24 小时倒计时，关闭主窗口后继续运行。登录失效、网络异常有提示和可复制诊断。Linux 网页版保留官网签到入口。
+- **自动网页签到（Windows）**：主窗口常驻精简状态与开关；登录或处理登录失效时再展开内嵌官网。后台按 24 小时加 30 秒计时，关闭主窗口后继续运行，重启保留进度。Linux 网页版保留官网签到入口。
 
 - **粉色管理界面**：清晰展示隧道列表，直接启动或停止单条隧道。
 - **隧道详情**：粉色卡片窗口，实时展示速率曲线、累计流量、开机连接状态与可复制的访问地址。
 - **独立后台服务**：关闭程序窗口后，隧道进程仍可继续运行。
 - **一键安装服务**：在程序内申请管理员权限，安装或卸载 Windows Service。
 - **开机自动连接**：每条隧道独立胶囊开关，同步和重启后保留设置；开机网络未就绪时重试，手动停止后取消本轮重试。
-- **Windows x64 单文件版**：双击一个 EXE，自动准备运行环境；同时提供 ZIP 版。
+- **Windows x64 单文件版，不到 100 MB**：如缺少 .NET 10 Desktop Runtime，启动器会询问是否打开微软官方下载页；安装后重新运行即可。另提供体积更小的 ZIP 版。
 - **Linux 网页版**：Docker Compose 部署，可登录管理台、同步云端隧道、逐条启动/停止与设置容器重启后自动连接，并在线更新经过 SHA256 校验的 FRP。
 - **Docker 实时流量**：显示容器网络接口最近 60 秒流量曲线，统计包含网页管理流量；官网累计流量单独显示。
 
@@ -50,12 +50,12 @@
 
 #### 单文件版（推荐）
 
-1. 打开 [GitHub Releases 下载页](https://github.com/kkbbzjh/LoliaBloom/releases/latest)，下载 `LoliaBloom-v0.7.15-win-x64.exe`；国内也可使用[蓝奏云下载](https://listenscript.lanzouc.com/b0umm01ub)。
-2. 双击运行即可，不需要单独安装 .NET。
+1. 打开 [GitHub Releases 下载页](https://github.com/kkbbzjh/LoliaBloom/releases/latest)，下载 `LoliaBloom-v0.7.16-win-x64.exe`；国内也可使用[蓝奏云下载](https://listenscript.lanzouc.com/b0umm01ub)。
+2. 双击运行即可。如果没有 .NET 10 Desktop Runtime，可选择打开微软官方下载页；安装后重新运行软件。
 
 #### ZIP 版
 
-也可以下载 `LoliaBloom-v0.7.15-win-x64.zip`，解压后运行其中的 `Lolia.App.exe`。
+也可以下载 `LoliaBloom-v0.7.16-win-x64.zip`，解压后运行其中的 `Lolia.App.exe`。精简 ZIP 需要 .NET 10 Desktop Runtime；如未安装，可从[微软官网下载](https://dotnet.microsoft.com/download/dotnet/10.0)。单文件 EXE 检测到缺少运行时后会打开微软官方下载页。
 
 #### 安装后台服务
 

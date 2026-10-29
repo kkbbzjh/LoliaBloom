@@ -5,6 +5,9 @@ public partial class MainWindow {
  async void RunLayoutTest(string log){
   try{
    await Task.Delay(1000);poller.Stop();Width=MinWidth;Height=MinHeight;
+   if(CheckinPageExpander.IsExpanded)throw new Exception("The small check-in feature expanded its website by default");
+   CheckinPage_Click(this,new RoutedEventArgs());if(!CheckinPageExpander.IsExpanded)throw new Exception("The website did not open inside the main window");
+   CheckinPage_Click(this,new RoutedEventArgs());if(CheckinPageExpander.IsExpanded)throw new Exception("The website section did not collapse on request");
    if(InstallLogPanel.IsExpanded)throw new Exception("Diagnostics unexpectedly expanded by default");
    ShowDiagnostics("布局测试：默认折叠",string.Join("\n",Enumerable.Repeat("错误信息测试 · 可复制日志",30)));
    if(InstallLogPanel.IsExpanded)throw new Exception("An error expanded the full diagnostic report automatically");
