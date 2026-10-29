@@ -4,3 +4,11 @@ dist/
 *.zip
 payload.zip
 release/
+upstream-client/
+frpc-upstream.zip
+SHA256SUMS.txt
+LoliaBloom-v*-win-x64.exe
+LoliaBloom-screenshot.png
+layout-test.log
+checkin-test.log
+layout-test.log-*.png

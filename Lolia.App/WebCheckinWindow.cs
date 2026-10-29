@@ -25,6 +25,8 @@ public sealed class WebCheckinWindow:Window {
  (bool Ok,int Http,string? Gb)? lastResult;
  public static void Launch(bool show){var p=new ProcessStartInfo(Environment.ProcessPath!){UseShellExecute=false};p.ArgumentList.Add(show?"--checkin-open":"--checkin-worker");Process.Start(p)?.Dispose();}
  public static void ResumeIfEnabled(){if(WebCheckinSettings.Load().Enabled)Launch(false);}
+ public static void SetEnabledFromMain(bool enabled){var state=WebCheckinSettings.Load();state.Enabled=enabled;state.NextCheck=DateTimeOffset.UtcNow;state.Status=enabled?"已开启，正在检查官网登录状态。":"已关闭，不再自动签到。";state.Save();ConfigureStartup(enabled);if(enabled)Launch(false);else try{using var signal=EventWaitHandle.OpenExisting("Local\\LoliaBloomWebCheckinStop");signal.Set();}catch(WaitHandleCannotBeOpenedException){}}
+ public static void RequestCheckFromMain(){var state=WebCheckinSettings.Load();state.NextCheck=DateTimeOffset.UtcNow;state.Save();if(state.Enabled)Launch(false);}
  public static void StartWorker(bool show){
   singleton=new Mutex(true,MutexName,out var first);
   if(!first){if(show){try{using var signal=EventWaitHandle.OpenExisting(OpenEvent);signal.Set();}catch(WaitHandleCannotBeOpenedException){MessageBox.Show("自动签到正在启动，请稍后再打开。");}}Application.Current.Shutdown();return;}
@@ -150,7 +152,7 @@ public sealed class WebCheckinWindow:Window {
     if(kind=="foreign"){SetStatus("当前不是官网页面，已暂停自动点击。请重新打开官网。");return;}
     if(kind=="checked"&&!clicked){if(state.LastSuccess is {} known&&known.AddHours(24).AddSeconds(30)>DateTimeOffset.UtcNow)state.NextCheck=known.AddHours(24).AddSeconds(30);SetStatus("官网显示已签到，30 分钟后复查可签到状态。");return;}
     if(kind=="available"&&!clicked){
-     if(state.LastSuccess is {} previous&&previous.AddHours(24)>DateTimeOffset.UtcNow){state.NextCheck=previous.AddHours(24).AddSeconds(30);SetStatus("距上次成功尚未满 24 小时，继续倒计时。");return;}
+     if(state.LastSuccess is {} previous&&previous.AddHours(24).AddSeconds(30)>DateTimeOffset.UtcNow){state.NextCheck=previous.AddHours(24).AddSeconds(30);SetStatus("距上次成功尚未满 24 小时 30 秒，继续倒计时。");return;}
      if(!state.Enabled){SetStatus("现在可以签到。开启上方自动签到开关后，才会自动点击。");return;}
      clicked=true;SetStatus("已点击签到，正在等待官网确认…");
      await browser.ExecuteScriptAsync("(()=>{const b=[...document.querySelectorAll('button')].find(b=>b.textContent.trim()==='签到'&&!b.disabled&&b.getClientRects().length);if(b)b.click();})()");

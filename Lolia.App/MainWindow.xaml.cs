@@ -10,6 +10,8 @@ using System.Net.Http.Headers;
 using System.Security.Cryptography;
 using System.Text;
 using System.Diagnostics;
+using Microsoft.Web.WebView2.Core;
+using Microsoft.Web.WebView2.Wpf;
 namespace Lolia.App;
 public partial class MainWindow:ChromeWindow {
  SavedSession? session=SessionStore.Load();
@@ -22,6 +24,7 @@ public partial class MainWindow:ChromeWindow {
  bool installingService;
  TunnelDetailsWindow? details;
  readonly System.Windows.Threading.DispatcherTimer poller=new(){Interval=TimeSpan.FromSeconds(1)};
+ readonly System.Windows.Threading.DispatcherTimer checkinPoller=new(){Interval=TimeSpan.FromSeconds(1)};
  readonly Dictionary<string,TrafficSample> cloudTotals=new();
  bool cloudRefreshing;
  DateTimeOffset nextCloudPoll=DateTimeOffset.MinValue;
@@ -33,7 +36,7 @@ public partial class MainWindow:ChromeWindow {
  string? notice;DateTimeOffset noticeUntil;
  public MainWindow(){
   InitializeComponent();AppVersion.Text="v"+(typeof(MainWindow).Assembly.GetName().Version?.ToString(3)??"未知");UploadChart.LineBrush=new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(133,101,165));api=new LoliaApi(http,GetAccessToken);
-  Loaded+=async(_,_)=>{_=CompleteUpdateHandoff();_=CheckAppUpdate(false);if(session!=null)await Safe(Sync);else await Refresh();poller.Tick+=async(_,_)=>await Refresh();poller.Start();};Closed+=(_,_)=>{poller.Stop();details?.Close();};
+  Loaded+=async(_,_)=>{_=CompleteUpdateHandoff();_=CheckAppUpdate(false);if(!Environment.GetCommandLineArgs().Any(x=>x.Contains("screenshot")||x=="--layout-self-test"||x=="--self-test"||x=="--update-smoke"))await InitializeCheckinBrowser();UpdateCheckinUi();checkinPoller.Tick+=(_,_)=>UpdateCheckinUi();checkinPoller.Start();if(session!=null)await Safe(Sync);else await Refresh();poller.Tick+=async(_,_)=>await Refresh();poller.Start();};Closed+=(_,_)=>{poller.Stop();checkinPoller.Stop();CheckinBrowser.Dispose();details?.Close();};
  }
  async Task<string> GetAccessToken(){
   await authGate.WaitAsync();
@@ -101,13 +104,13 @@ public partial class MainWindow:ChromeWindow {
    UploadChart.Add(list.Any(t=>t.UploadBytesPerSecond!=null)?list.Sum(t=>t.UploadBytesPerSecond??0):null);
    details?.Update(list.FirstOrDefault(t=>t.Id==details.TunnelId));
    RunningCount.Text=$"{list.Count(t=>t.Running)} / {list.Count}";
-   if(lastServiceError!=null&&lastServiceError!=lastReportedServiceIssue){lastReportedServiceIssue=lastServiceError;ShowDiagnostics("后台服务状态异常",lastServiceError);}
+   if(lastServiceError!=null&&lastServiceError!=lastReportedServiceIssue){lastReportedServiceIssue=lastServiceError;ShowDiagnostics("后台服务状态异常",lastServiceError);Status.Text="后台服务暂时无法连接；可点“诊断与报错”查看处理建议。";}
    var failed=list.FirstOrDefault(t=>!string.IsNullOrWhiteSpace(t.LastError));
    var fingerprint=failed==null?null:failed.Id+failed.LastError;
-   if(failed!=null&&fingerprint!=lastReportedTunnelError){lastReportedTunnelError=fingerprint;ShowDiagnostics("隧道启动 / 开机连接异常",failed.LastError??"");}
+   if(failed!=null&&fingerprint!=lastReportedTunnelError){lastReportedTunnelError=fingerprint;ShowDiagnostics("隧道启动 / 开机连接异常",failed.LastError??"");Status.Text="隧道启动遇到问题；可点“诊断与报错”查看处理建议。";}
 
    EmptyState.Visibility=list.Count==0?Visibility.Visible:Visibility.Collapsed;
-   Status.Text=DateTimeOffset.UtcNow<noticeUntil?notice:serviceStatus+$" · {DateTime.Now:HH:mm:ss}";
+   Status.Text=DateTimeOffset.UtcNow<noticeUntil?notice:lastServiceError!=null?"后台服务暂时无法连接；可点“诊断与报错”查看处理建议。":serviceStatus+$" · {DateTime.Now:HH:mm:ss}";
   }catch(Exception e){Status.Text=e.Message;}finally{refreshing=false;}
  }
  async Task RefreshCloudData(){
@@ -128,6 +131,9 @@ public partial class MainWindow:ChromeWindow {
   }catch(Exception e){CheckinStatus.Text="平台状态："+e.Message;}finally{cloudRefreshing=false;}
  }
  async Task Safe(Func<Task> f){try{await f();}catch(Exception e){ShowDiagnostics("操作未完成",e.ToString());}}
+ async Task InitializeCheckinBrowser(){try{var env=await CoreWebView2Environment.CreateAsync(null,Path.Combine(WebCheckinSettings.Root,"browser"));await CheckinBrowser.EnsureCoreWebView2Async(env);CheckinBrowser.CoreWebView2.Settings.AreDevToolsEnabled=false;CheckinBrowser.CoreWebView2.NewWindowRequested+=(_,e)=>{e.Handled=true;if(Uri.TryCreate(e.Uri,UriKind.Absolute,out var uri)&&uri.Scheme=="https")Process.Start(new ProcessStartInfo(uri.AbsoluteUri){UseShellExecute=true});};CheckinBrowser.Source=new Uri("https://dash.lolia.link/dash");}catch(Exception ex){CheckinMainStatus.Text="官网页面无法打开：请安装 Microsoft Edge WebView2 Runtime，或查看诊断报告。";ShowDiagnostics("无法打开官网签到页面",ex.ToString());}}
+ void UpdateCheckinUi(){var state=WebCheckinSettings.Load();CheckinToggle.IsChecked=state.Enabled;var countdown=state.Countdown();CheckinMainStatus.Text=state.Status+(string.IsNullOrWhiteSpace(countdown)?"":"\n"+countdown)+(state.LastSuccess is {} success?"\n上次成功："+success.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss"):"");CheckinStatus.Text=state.Enabled?"签到后台运行中":"自动签到已关闭";}
+ void CheckinToggle_Click(object s,RoutedEventArgs e){try{WebCheckinWindow.SetEnabledFromMain(CheckinToggle.IsChecked==true);UpdateCheckinUi();}catch(Exception ex){CheckinToggle.IsChecked=WebCheckinSettings.Load().Enabled;ShowDiagnostics("自动签到设置未保存",ex.ToString());}}
  string DiagnosticReport(string title,string detail){
   var report=new StringBuilder();report.AppendLine("洛链绽放诊断报告（请连同你的操作步骤提交）");
   report.AppendLine("时间："+DateTimeOffset.Now.ToString("O"));report.AppendLine("版本："+typeof(MainWindow).Assembly.GetName().Version);report.AppendLine("系统："+Environment.OSVersion);report.AppendLine("后台服务："+ServiceState());
@@ -148,12 +154,12 @@ public partial class MainWindow:ChromeWindow {
   var text=report.ToString();foreach(var secret in new[]{session?.AccessToken,session?.RefreshToken})if(!string.IsNullOrWhiteSpace(secret))text=text.Replace(secret,"[REDACTED]",StringComparison.Ordinal);
   return System.Text.RegularExpressions.Regex.Replace(text,@"(?i)(token|password|authorization|secret)([\s:=]+)[^\s,;]+","$1$2[REDACTED]");
  }
- void ShowDiagnostics(string title,string detail){
+ void ShowDiagnostics(string title,string detail,bool reveal=false){
   ServiceGuide.Visibility=Visibility.Visible;GuideTitle.Text=title;GuideDescription.Text="请查看下方具体错误与处理建议。可一键复制诊断报告，保留此报告提交 BUG。";
-  InstallLogPanel.Visibility=Visibility.Visible;InstallLogPanel.IsExpanded=true;InstallLogText.Text=DiagnosticReport(title,detail);Status.Text=title;
+  InstallLogPanel.Visibility=Visibility.Visible;InstallLogPanel.IsExpanded=reveal;InstallLogText.Text=DiagnosticReport(title,detail);if(!reveal)Status.Text=title+"；点击“诊断与报错”查看详情。";
   try{var folder=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"LoliaBloom","logs");Directory.CreateDirectory(folder);installLogPath=Path.Combine(folder,"diagnostic-"+DateTime.Now.ToString("yyyyMMdd-HHmmss")+".log");File.WriteAllText(installLogPath,InstallLogText.Text);}catch(Exception ex){Status.Text=title+"；日志保存失败："+ex.Message;}
  }
- void Diagnostics_Click(object s,RoutedEventArgs e)=>ShowDiagnostics("手动查看诊断", "请描述刚才执行了什么操作、预期行为和实际表现。");
+ void Diagnostics_Click(object s,RoutedEventArgs e){if(InstallLogPanel.Visibility==Visibility.Visible&&InstallLogPanel.IsExpanded){InstallLogPanel.IsExpanded=false;return;}if(InstallLogPanel.Visibility==Visibility.Visible&&InstallLogText.Text.Length>0){ServiceGuide.Visibility=Visibility.Visible;InstallLogPanel.IsExpanded=true;return;}ShowDiagnostics("手动查看诊断", "请描述刚才执行了什么操作、预期行为和实际表现。",true);}
  void DismissDiagnostics_Click(object s,RoutedEventArgs e){installLogPath=null;InstallLogPanel.Visibility=Visibility.Collapsed;ServiceGuide.Visibility=Visibility.Collapsed;}
 
  async void Refresh_Click(object s,RoutedEventArgs e){nextCloudPoll=DateTimeOffset.MinValue;await Safe(Refresh);}
@@ -287,9 +293,7 @@ public partial class MainWindow:ChromeWindow {
  void Details_Click(object s,RoutedEventArgs e){
   try{var row=Selected();if(details?.TunnelId==row.Id){details.Activate();return;}details?.Close();var dialog=new TunnelDetailsWindow(row){Owner=this};details=dialog;dialog.Closed+=(_,_)=>{if(details==dialog)details=null;};dialog.Show();}catch(Exception ex){Status.Text=ex.Message;}
  }
- void Checkin_Click(object s,RoutedEventArgs e){
-  try{WebCheckinWindow.Launch(true);CheckinStatus.Text=WebCheckinSettings.Summary();}catch(Exception ex){ShowDiagnostics("无法打开自动签到",ex.ToString());}
- }
+ void Checkin_Click(object s,RoutedEventArgs e){try{WebCheckinWindow.RequestCheckFromMain();UpdateCheckinUi();}catch(Exception ex){ShowDiagnostics("无法执行自动签到检查",ex.ToString());}}
  void CopyAddress_Click(object s,RoutedEventArgs e){if(s is System.Windows.Controls.Button b&&b.Tag is string value)CopyAddress(value);}
  void CopySelected_Click(object s,RoutedEventArgs e){try{CopyAddress(Selected().RemoteAddress);}catch(Exception ex){MessageBox.Show(ex.Message);}}
  void CopyAddress(string? value){if(string.IsNullOrWhiteSpace(value))return;try{Clipboard.SetText(value);Status.Text="已复制访问地址："+value;}catch(Exception ex){MessageBox.Show("暂时无法写入剪贴板："+ex.Message);}}

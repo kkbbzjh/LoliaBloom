@@ -1,9 +1,5 @@
 name: Build and publish Linux Docker images
-on:
-  push:
-    branches: [main]
-    tags: ['v*']
-  workflow_dispatch:
+on: []
 permissions:
   contents: read
   packages: write
