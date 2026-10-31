@@ -1,6 +1,7 @@
 [CmdletBinding()]
 param(
   [string]$DotnetPath = (Join-Path $env:LOCALAPPDATA 'LoliaBloomBuild\dotnet\dotnet.exe'),
+  [string]$FrpZipPath,
   [switch]$PublishRelease
 )
 $ErrorActionPreference = 'Stop'
@@ -47,7 +48,13 @@ if ($LASTEXITCODE -ne 0) { throw 'Windows 主程序发布失败' }
 & $DotnetPath publish Lolia.Service/Lolia.Service.csproj -c Release -r win-x64 --self-contained true -o (Join-Path $dist 'Service')
 if ($LASTEXITCODE -ne 0) { throw 'Windows 后台服务发布失败' }
 $frpZip = Join-Path $stage 'frpc-upstream.zip'
-Invoke-WebRequest 'https://github.com/Lolia-FRP/lolia-frp/releases/download/v0.71.2/LoliaFrp_windows_amd64.zip' -OutFile $frpZip
+if ($FrpZipPath) {
+  if (-not (Test-Path -LiteralPath $FrpZipPath)) { throw "指定的 FRP 官方压缩包不存在：$FrpZipPath" }
+  $frpZip = (Resolve-Path -LiteralPath $FrpZipPath).Path
+} else {
+  & curl.exe -L --fail --retry 3 --retry-delay 2 --connect-timeout 20 'https://github.com/Lolia-FRP/lolia-frp/releases/download/v0.71.2/LoliaFrp_windows_amd64.zip' -o $frpZip
+  if ($LASTEXITCODE -ne 0) { throw 'FRP 官方压缩包下载失败' }
+}
 $frpHash = (Get-FileHash -LiteralPath $frpZip -Algorithm SHA256).Hash.ToLowerInvariant()
 if ($frpHash -ne '208a9a4c6d4d6f0a3c07cd2257c821b8cf3d7e49b809b34e3d5f2367dcb9127e') { throw 'FRP 官方压缩包 SHA256 校验失败' }
 $upstream = Join-Path $stage 'upstream-client'

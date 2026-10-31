@@ -8,7 +8,7 @@ namespace Lolia.Service;
 
 public sealed record EngineInfo(string Installed,string Latest,bool UpdateAvailable);
 public sealed class EngineUpdater(Func<string[]> running,Func<string,bool> stop,Func<string,bool> start,string? enginePath=null,HttpClient? client=null) {
- static readonly HttpClient defaultHttp=new(){Timeout=TimeSpan.FromSeconds(90)};
+ static readonly HttpClient defaultHttp=new(){Timeout=TimeSpan.FromMinutes(5)};
  HttpClient Http=>client??defaultHttp;
  string Executable=>enginePath??Paths.Frpc;
  const string Metadata="https://api.github.com/repos/Lolia-FRP/lolia-frp/releases/latest";
@@ -36,15 +36,18 @@ public sealed class EngineUpdater(Func<string[]> running,Func<string,bool> stop,
   var staged=Path.Combine(folder,"frpc.new.exe");var archive=Path.Combine(folder,"update.zip");var backup=Path.Combine(folder,"frpc.previous.exe");
   var oldVersion=Installed;var ids=Array.Empty<string>();bool replaced=false;
   try{
-   using(var req=new HttpRequestMessage(HttpMethod.Get,latest.Url)){
-    req.Headers.UserAgent.ParseAdd("LoliaBloom/0.5.0");
-    using var timeout=new CancellationTokenSource(TimeSpan.FromSeconds(90));
-    using var resp=await Http.SendAsync(req,HttpCompletionOption.ResponseHeadersRead,timeout.Token);resp.EnsureSuccessStatusCode();
-    if(resp.Content.Headers.ContentLength>100*1024*1024)throw new Exception("更新包超过大小上限");
-    await using var input=await resp.Content.ReadAsStreamAsync(timeout.Token);await using var file=File.Create(archive);
-    byte[] bytes=new byte[65536];long total=0;int read;
-    while((read=await input.ReadAsync(bytes,timeout.Token))>0){total+=read;if(total>100*1024*1024)throw new Exception("更新包超过大小上限");await file.WriteAsync(bytes.AsMemory(0,read),timeout.Token);}
-   }
+   try{
+    using(var req=new HttpRequestMessage(HttpMethod.Get,latest.Url)){
+     req.Headers.UserAgent.ParseAdd("LoliaBloom/0.5.0");
+     using var timeout=new CancellationTokenSource(TimeSpan.FromMinutes(5));
+     using var resp=await Http.SendAsync(req,HttpCompletionOption.ResponseHeadersRead,timeout.Token);resp.EnsureSuccessStatusCode();
+     if(resp.Content.Headers.ContentLength>100*1024*1024)throw new Exception("更新包超过大小上限");
+     await using var input=await resp.Content.ReadAsStreamAsync(timeout.Token);await using var file=File.Create(archive);
+     byte[] bytes=new byte[65536];long total=0;int read;
+     while((read=await input.ReadAsync(bytes,timeout.Token))>0){total+=read;if(total>100*1024*1024)throw new Exception("更新包超过大小上限");await file.WriteAsync(bytes.AsMemory(0,read),timeout.Token);}
+    }
+   }catch(HttpRequestException ex){throw new Exception("FRP 更新包下载失败（网络中断或代理不可用）。旧版本未替换；请检查网络或代理后重试。详情："+ex.Message);}
+   catch(TaskCanceledException){throw new Exception("FRP 更新包下载超过 5 分钟。旧版本未替换；请检查网络速度或稍后重试。");}
    var hash=Convert.ToHexString(SHA256.HashData(await File.ReadAllBytesAsync(archive)));
    if(!hash.Equals(latest.Hash,StringComparison.OrdinalIgnoreCase))throw new Exception("FRP 更新包 SHA256 校验失败，未替换旧版本");
    using(var zip=ZipFile.OpenRead(archive)){

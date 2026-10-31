@@ -63,7 +63,7 @@ public partial class MainWindow:ChromeWindow {
   try{
    var state=ServiceState();if(state!="running")throw new InvalidOperationException(state.Contains("StopPending",StringComparison.Ordinal)?state+"。后台服务正在停止，当前无法处理命令或保存设置。请等待；若持续卡住，使用新版安装 / 修复的定向恢复，或重启电脑后再试。":state+"。请点击安装 / 修复后台服务，并允许管理员授权。");
    using var pipe=new NamedPipeClientStream(".","LoliaBloomPipe",PipeDirection.InOut,PipeOptions.Asynchronous);
-   using var timeout=new CancellationTokenSource(TimeSpan.FromSeconds(c.Action.StartsWith("engine-",StringComparison.Ordinal)?180:15));
+   using var timeout=new CancellationTokenSource(IpcTimeouts.For(c));
    try{
     await pipe.ConnectAsync(timeout.Token);
     using var writer=new StreamWriter(pipe,Encoding.UTF8,leaveOpen:true){AutoFlush=true};
@@ -72,7 +72,7 @@ public partial class MainWindow:ChromeWindow {
     var line=await reader.ReadLineAsync(timeout.Token);
     if(line==null)throw new IOException("后台服务意外关闭连接，请重新安装服务后重试");
     return JsonSerializer.Deserialize<Reply>(line,Paths.Json)??throw new IOException("后台服务返回了空响应");
-   }catch(OperationCanceledException){throw new System.TimeoutException("后台服务在 15 秒内未确认命令结果（"+c.Action+"）。请先刷新并查看诊断报告，确认隧道实际状态；不要连续重复点击或直接重装服务。");}
+   }catch(OperationCanceledException){throw new System.TimeoutException("后台服务在 "+((int)IpcTimeouts.For(c).TotalSeconds)+" 秒内未确认命令结果（"+c.Action+"）。请先刷新并查看诊断报告，确认隧道实际状态；不要连续重复点击或直接重装服务。");}
    catch(UnauthorizedAccessException){throw new IOException("Windows 拒绝访问后台服务通信通道，请重新安装服务修复权限。");}
   }finally{pipeGate.Release();}
  }

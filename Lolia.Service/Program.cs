@@ -41,13 +41,14 @@ sealed class Manager:BackgroundService {
     await pipe.WaitForConnectionAsync(ct);
     using var reader=new StreamReader(pipe,System.Text.Encoding.UTF8,leaveOpen:true);
     using var writer=new StreamWriter(pipe,System.Text.Encoding.UTF8,leaveOpen:true){AutoFlush=true};
-    using var requestTimeout=CancellationTokenSource.CreateLinkedTokenSource(ct);requestTimeout.CancelAfter(TimeSpan.FromSeconds(10));
-    var line=await reader.ReadLineAsync(requestTimeout.Token);
+    using var readTimeout=CancellationTokenSource.CreateLinkedTokenSource(ct);readTimeout.CancelAfter(TimeSpan.FromSeconds(10));
+    var line=await reader.ReadLineAsync(readTimeout.Token);
     if(line==null)continue;
     var cmd=JsonSerializer.Deserialize<Command>(line,Paths.Json)!;
+    using var responseTimeout=CancellationTokenSource.CreateLinkedTokenSource(ct);responseTimeout.CancelAfter(IpcTimeouts.For(cmd));
     Reply reply;
     try { reply=await Handle(cmd,ct); }catch(Exception ex){reply=new(false,ex.Message);}
-    await writer.WriteLineAsync(JsonSerializer.Serialize(reply,Paths.Json).AsMemory(),requestTimeout.Token);
+    await writer.WriteLineAsync(JsonSerializer.Serialize(reply,Paths.Json).AsMemory(),responseTimeout.Token);
    }catch(OperationCanceledException) when(ct.IsCancellationRequested){break;}catch(OperationCanceledException){Record("service","空闲或异常通信已超时断开，后台继续接受命令。");}catch(Exception ex){Console.Error.WriteLine(ex);await Task.Delay(1000,ct);}
   }
   try{await startupTask;}catch(OperationCanceledException){}

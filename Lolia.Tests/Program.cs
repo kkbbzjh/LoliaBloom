@@ -13,6 +13,10 @@ if(args.Length==2&&args[0]=="-t"){
  while(true){Console.WriteLine("中文连接日志：本地服务尚未启动");Console.Error.WriteLine("connect to local service [127.0.0.1:6789] error: connection refused");Thread.Sleep(10);}
 }
 void Assert(bool b,string msg){if(!b)throw new Exception(msg);}
+Assert(Lolia.Shared.IpcTimeouts.For(new("engine-check"))==TimeSpan.FromMinutes(5),"FRP update IPC timeout must cover long downloads");
+Assert(Lolia.Shared.IpcTimeouts.For(new("engine-update"))==TimeSpan.FromMinutes(5),"FRP update IPC timeout must cover long downloads");
+Assert(Lolia.Shared.IpcTimeouts.For(new("list"))==TimeSpan.FromSeconds(10),"ordinary service commands must stay responsive");
+Console.WriteLine("PASS: FRP commands use long IPC timeout while ordinary commands stay responsive");
 // Exercise the real update manifest parser and streaming downloader with a fake transport.
 var updateBytes=Encoding.UTF8.GetBytes(new string('x',2048));
 var updateHash=Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(updateBytes)).ToLowerInvariant();
