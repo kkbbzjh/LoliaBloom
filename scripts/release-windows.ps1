@@ -52,7 +52,7 @@ if ($FrpZipPath) {
   if (-not (Test-Path -LiteralPath $FrpZipPath)) { throw "指定的 FRP 官方压缩包不存在：$FrpZipPath" }
   $frpZip = (Resolve-Path -LiteralPath $FrpZipPath).Path
 } else {
-  & curl.exe -L --fail --retry 3 --retry-delay 2 --connect-timeout 20 'https://github.com/Lolia-FRP/lolia-frp/releases/download/v0.71.2/LoliaFrp_windows_amd64.zip' -o $frpZip
+  & (Join-Path $PSScriptRoot 'download-frp.ps1') -OutputPath $frpZip
   if ($LASTEXITCODE -ne 0) { throw 'FRP 官方压缩包下载失败' }
 }
 $frpHash = (Get-FileHash -LiteralPath $frpZip -Algorithm SHA256).Hash.ToLowerInvariant()
