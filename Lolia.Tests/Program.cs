@@ -86,9 +86,18 @@ if(args.Length==3&&args[0]=="--engine-test"){
  try{
   var path=Path.Combine(folder,"frpc.exe");await File.WriteAllBytesAsync(path,executable);File.WriteAllText(Path.Combine(folder,"engine-version.txt"),"v0.71.2");
   int stopped=0,started=0;
-  HttpClient MakeClient(bool corrupt)=>new(new Fake(r=>{
+  int rangeRequests=0;
+  HttpClient MakeClient(bool corrupt,bool ranges=false)=>new(new Fake(r=>{
    if(r.RequestUri!.Host=="api.github.com")return Task.FromResult(Json(System.Text.Json.JsonSerializer.Serialize(new{tag_name="v99.0.0",assets=new[]{new{name="LoliaFrp_windows_amd64.zip",browser_download_url="https://github.com/Lolia-FRP/lolia-frp/releases/download/v99.0.0/LoliaFrp_windows_amd64.zip",digest="sha256:"+(corrupt?new string('0',64):digest)}}})));
-   return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK){Content=new ByteArrayContent(archive)});
+   var content=corrupt?new byte[archive.Length]:archive;
+   var response=new HttpResponseMessage(HttpStatusCode.OK){Content=new ByteArrayContent(content)};
+   if(ranges)response.Headers.AcceptRanges.Add("bytes");
+   if(r.Headers.Range is{ } range){
+    var item=range.Ranges.First();var from=(int)item.From!.Value;var to=(int)item.To!.Value;
+    System.Threading.Interlocked.Increment(ref rangeRequests);
+    response=new HttpResponseMessage(HttpStatusCode.PartialContent){Content=new ByteArrayContent(content[from..(to+1)])};
+   }
+   return Task.FromResult(response);
   }));
   using(var client=MakeClient(true)){
    var updater=new Lolia.Service.EngineUpdater(()=>new[]{"test"},_=>{stopped++;return true;},_=>true,path,client);
@@ -100,6 +109,14 @@ if(args.Length==3&&args[0]=="--engine-test"){
    try{await updater.Update();throw new Exception("Expected restart failure");}catch(Exception e) when(e.Message.Contains("更新后无法恢复")){}
    Assert(started==2,"rollback must restart old engine");Assert(File.ReadAllText(Path.Combine(folder,"engine-version.txt"))=="v0.71.2","rollback must preserve version");
    Assert((await File.ReadAllBytesAsync(path)).SequenceEqual(executable),"rollback must restore original executable");
+  }
+  using(var client=MakeClient(false,true)){
+   var updater=new Lolia.Service.EngineUpdater(()=>Array.Empty<string>(),_=>true,_=>true,path,client);
+   var message=await updater.Update();
+   Assert(message.Contains("已更新"),"parallel range update must complete");
+   Assert(rangeRequests>1,"large FRP downloads must use parallel range requests");
+   Assert(File.ReadAllText(Path.Combine(folder,"engine-version.txt"))=="v99.0.0","successful update must record engine version");
+   Assert((await File.ReadAllBytesAsync(path)).SequenceEqual(executable),"successful update must install the verified executable");
   }
   Console.WriteLine("PASS: corrupt FRP update rejected before interruption; failed restart rolls back engine and resumes tunnels");
  }finally{Directory.Delete(folder,true);}

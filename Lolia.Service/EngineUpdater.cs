@@ -30,6 +30,52 @@ public sealed class EngineUpdater(Func<string[]> running,Func<string,bool> stop,
  }
  static bool Newer(string a,string b)=>!Version.TryParse(b.TrimStart('v'),out var current)||Version.Parse(a.TrimStart('v'))>current;
  public async Task<EngineInfo> Check(){var latest=await Latest();return new(Installed,latest.Tag,Newer(latest.Tag,Installed));}
+ async Task DownloadArchive(string url,string archive,CancellationToken token){
+  long total;bool supportsRanges;
+  using(var request=new HttpRequestMessage(HttpMethod.Get,url)){
+   request.Headers.UserAgent.ParseAdd("LoliaBloom/0.5.0");
+   using var response=await Http.SendAsync(request,HttpCompletionOption.ResponseHeadersRead,token);response.EnsureSuccessStatusCode();
+   total=response.Content.Headers.ContentLength??-1;supportsRanges=response.Headers.AcceptRanges.Contains("bytes");
+   if(total<1024*1024||!supportsRanges){
+    await using var input=await response.Content.ReadAsStreamAsync(token);await using var output=File.Create(archive);
+    byte[] bytes=new byte[65536];int read;while((read=await input.ReadAsync(bytes,token))>0)await output.WriteAsync(bytes.AsMemory(0,read),token);
+    return;
+   }
+  }
+
+  var chunkSize=(total+31)/32;var paths=new string[32];
+  try{
+   await Parallel.ForAsync(0,paths.Length,new ParallelOptions{MaxDegreeOfParallelism=16,CancellationToken=token},async(i,ct)=>{
+    var start=i*chunkSize;var end=Math.Min(total-1,(i+1)*chunkSize-1);paths[i]=Path.Combine(Path.GetDirectoryName(archive)!,$"update.zip.part-{i}");
+    await DownloadRange(url,start,end,paths[i],ct);
+   });
+   await using var output=File.Create(archive);
+   foreach(var part in paths){await using var input=File.OpenRead(part);await input.CopyToAsync(output,64*1024,token);}
+   if(output.Length!=total)throw new IOException("FRP 分段下载合并后大小不一致");
+  }finally{foreach(var part in paths)if(part!=null)try{File.Delete(part);}catch{}}
+ }
+ async Task DownloadRange(string url,long start,long end,string path,CancellationToken token){
+  var expected=end-start+1;Exception? last=null;
+  for(var attempt=0;attempt<3;attempt++){
+   try{
+    using var attemptTimeout=CancellationTokenSource.CreateLinkedTokenSource(token);attemptTimeout.CancelAfter(TimeSpan.FromSeconds(100));
+    using var request=new HttpRequestMessage(HttpMethod.Get,url);
+    request.Headers.UserAgent.ParseAdd("LoliaBloom/0.5.0");request.Headers.Range=new(start,end);
+    using var response=await Http.SendAsync(request,HttpCompletionOption.ResponseHeadersRead,attemptTimeout.Token);
+    if(response.StatusCode!=System.Net.HttpStatusCode.PartialContent)throw new HttpRequestException("官方服务器未按分段范围返回数据");
+    if(response.Content.Headers.ContentLength is { } length&&length!=expected)throw new HttpRequestException("官方分段大小不符合请求范围");
+    await using var input=await response.Content.ReadAsStreamAsync(attemptTimeout.Token);await using var output=File.Create(path);
+    byte[] bytes=new byte[65536];long total=0;int read;
+    while((read=await input.ReadAsync(bytes,attemptTimeout.Token))>0){total+=read;await output.WriteAsync(bytes.AsMemory(0,read),attemptTimeout.Token);}
+    if(total!=expected)throw new IOException("FRP 分段下载数据不完整");
+    return;
+   }catch(Exception ex) when(!token.IsCancellationRequested&&ex is HttpRequestException or IOException or OperationCanceledException){
+    last=ex;
+    if(attempt<2)await Task.Delay(TimeSpan.FromSeconds(1),token);else throw new HttpRequestException("FRP 分段下载失败或超时，已重试 3 次。",last);
+   }
+  }
+  throw new HttpRequestException("FRP 分段下载失败或超时，已重试 3 次。",last);
+ }
  public async Task<string> Update(){
   var latest=await Latest();if(!Newer(latest.Tag,Installed))return $"已安装 {Installed}，无需更新";
   var folder=Path.GetDirectoryName(Executable)!;Directory.CreateDirectory(folder);
@@ -37,15 +83,8 @@ public sealed class EngineUpdater(Func<string[]> running,Func<string,bool> stop,
   var oldVersion=Installed;var ids=Array.Empty<string>();bool replaced=false;
   try{
    try{
-    using(var req=new HttpRequestMessage(HttpMethod.Get,latest.Url)){
-     req.Headers.UserAgent.ParseAdd("LoliaBloom/0.5.0");
-     using var timeout=new CancellationTokenSource(TimeSpan.FromMinutes(5));
-     using var resp=await Http.SendAsync(req,HttpCompletionOption.ResponseHeadersRead,timeout.Token);resp.EnsureSuccessStatusCode();
-     if(resp.Content.Headers.ContentLength>100*1024*1024)throw new Exception("更新包超过大小上限");
-     await using var input=await resp.Content.ReadAsStreamAsync(timeout.Token);await using var file=File.Create(archive);
-     byte[] bytes=new byte[65536];long total=0;int read;
-     while((read=await input.ReadAsync(bytes,timeout.Token))>0){total+=read;if(total>100*1024*1024)throw new Exception("更新包超过大小上限");await file.WriteAsync(bytes.AsMemory(0,read),timeout.Token);}
-    }
+    using var timeout=new CancellationTokenSource(TimeSpan.FromMinutes(5));
+    await DownloadArchive(latest.Url,archive,timeout.Token);
    }catch(HttpRequestException ex){throw new Exception("FRP 更新包下载失败（网络中断或代理不可用）。旧版本未替换；请检查网络或代理后重试。详情："+ex.Message);}
    catch(TaskCanceledException){throw new Exception("FRP 更新包下载超过 5 分钟。旧版本未替换；请检查网络速度或稍后重试。");}
    var hash=Convert.ToHexString(SHA256.HashData(await File.ReadAllBytesAsync(archive)));
